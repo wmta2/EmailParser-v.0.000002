@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, type RawEmail, type Order, type EmailWithOrder } from '../lib/supabase';
+import { supabase, type RawEmail, type Order, type EmailWithOrder, type OrderEmailsView, transformViewToEmailWithOrder } from '../lib/supabase';
 import { detectTemplate, type DetectionResult } from '../lib/emailParser';
 import { parseAndCreateOrder } from '../lib/services/emailParsingService';
 
@@ -64,151 +64,40 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsResult {
       setLoading(true);
       setError(null);
 
-      const dbSortColumn = sortColumn === 'status' ? 'created_at' : sortColumn;
+      const dbSortColumn = sortColumn === 'status' ? 'email_created_at' :
+                           sortColumn === 'created_at' ? 'email_created_at' :
+                           sortColumn === 'subject' ? 'email_subject' :
+                           sortColumn === 'from_email' ? 'email_from_email' :
+                           sortColumn === 'platform' ? 'email_platform' :
+                           'email_created_at';
 
-      // Build query based on status filter
-      let emailsWithOrders: EmailWithOrder[] = [];
-      let totalFilteredCount = 0;
+      let query = supabase
+        .from('order_emails_view')
+        .select('*', { count: 'exact' });
 
-      if (statusFilter === 'unparsed') {
-        // Fetch emails that don't have orders
-        let query = supabase
-          .from('raw_email')
-          .select('*', { count: 'exact' })
-          .order(dbSortColumn, { ascending: sortDirection === 'asc' });
-
-        if (search) {
-          query = query.or(`subject.ilike.%${search}%,from_email.ilike.%${search}%`);
-        }
-
-        const from = (page - 1) * pageSize;
-        const to = from + pageSize - 1;
-        query = query.range(from, to);
-
-        const { data: emailsData, error: emailsError, count } = await query;
-        if (emailsError) throw emailsError;
-
-        const emailIds = (emailsData || []).map(e => e.id);
-
-        // Check which emails have orders
-        let ordersData: Order[] = [];
-        if (emailIds.length > 0) {
-          const { data } = await supabase
-            .from('orders')
-            .select('*')
-            .in('raw_email_id', emailIds);
-          ordersData = data || [];
-        }
-
-        // Filter out emails that have orders
-        emailsWithOrders = (emailsData || [])
-          .map(email => {
-            const order = ordersData.find(o => o.raw_email_id === email.id);
-            return { ...email, order };
-          })
-          .filter(email => !email.order);
-
-        // Count unparsed emails
-        const { count: unparsedCount } = await supabase
-          .from('raw_email')
-          .select('id', { count: 'exact', head: true });
-
-        const { count: parsedCount } = await supabase
-          .from('orders')
-          .select('id', { count: 'exact', head: true })
-          .eq('channel_source', 'email');
-
-        totalFilteredCount = (unparsedCount ?? 0) - (parsedCount ?? 0);
-
-      } else if (statusFilter === 'all') {
-        // Fetch all emails with orders
-        let query = supabase
-          .from('raw_email')
-          .select('*', { count: 'exact' })
-          .order(dbSortColumn, { ascending: sortDirection === 'asc' });
-
-        if (search) {
-          query = query.or(`subject.ilike.%${search}%,from_email.ilike.%${search}%`);
-        }
-
-        const from = (page - 1) * pageSize;
-        const to = from + pageSize - 1;
-        query = query.range(from, to);
-
-        const { data: emailsData, error: emailsError, count } = await query;
-        if (emailsError) throw emailsError;
-
-        const emailIds = (emailsData || []).map(e => e.id);
-
-        let ordersData: Order[] = [];
-        if (emailIds.length > 0) {
-          const { data } = await supabase
-            .from('orders')
-            .select('*')
-            .in('raw_email_id', emailIds);
-          ordersData = data || [];
-        }
-
-        emailsWithOrders = (emailsData || []).map(email => {
-          const order = ordersData.find(o => o.raw_email_id === email.id);
-          return { ...email, order };
-        });
-
-        totalFilteredCount = count ?? 0;
-
-      } else {
-        // Fetch orders with specific status, then get their emails
-        let orderQuery = supabase
-          .from('orders')
-          .select('*, raw_email!inner(id, created_at, subject, from_email, platform, message_id, date_received, customer_id, date_parsed)', { count: 'exact' })
-          .eq('channel_source', 'email');
-
-        // Apply status-specific filters
-        if (statusFilter === 'exported') {
-          orderQuery = orderQuery.eq('ow_export_status', 'exported');
-        } else if (statusFilter === 'export_failed') {
-          orderQuery = orderQuery.eq('ow_export_status', 'export_failed');
-        } else if (statusFilter === 'pending') {
-          orderQuery = orderQuery.eq('parsing_status', 'pending').is('ow_export_status', null);
-        } else if (statusFilter === 'confirmed') {
-          orderQuery = orderQuery.eq('parsing_status', 'confirmed').is('ow_export_status', null);
-        } else if (statusFilter === 'failed') {
-          orderQuery = orderQuery.eq('parsing_status', 'failed');
-        }
-
-        // Apply search filter on email fields
-        if (search) {
-          orderQuery = orderQuery.or(
-            `raw_email.subject.ilike.%${search}%,raw_email.from_email.ilike.%${search}%`
-          );
-        }
-
-        // Apply sorting on email fields
-        const orderColumn = dbSortColumn === 'created_at' ? 'raw_email.created_at' :
-                           dbSortColumn === 'subject' ? 'raw_email.subject' :
-                           dbSortColumn === 'from_email' ? 'raw_email.from_email' :
-                           dbSortColumn === 'platform' ? 'raw_email.platform' :
-                           'raw_email.created_at';
-
-        orderQuery = orderQuery.order(orderColumn, { ascending: sortDirection === 'asc' });
-
-        const from = (page - 1) * pageSize;
-        const to = from + pageSize - 1;
-        orderQuery = orderQuery.range(from, to);
-
-        const { data: ordersWithEmails, error: ordersError, count } = await orderQuery;
-        if (ordersError) throw ordersError;
-
-        // Transform to EmailWithOrder format
-        emailsWithOrders = (ordersWithEmails || []).map(orderRecord => {
-          const { raw_email, ...order } = orderRecord as any;
-          return { ...raw_email, order: order as Order };
-        });
-
-        totalFilteredCount = count ?? 0;
+      if (statusFilter !== 'all') {
+        query = query.eq('computed_status', statusFilter);
       }
 
-      // Sort by status if needed (client-side only for status column)
+      if (search) {
+        query = query.or(`email_subject.ilike.%${search}%,email_from_email.ilike.%${search}%`);
+      }
+
+      if (sortColumn !== 'status') {
+        query = query.order(dbSortColumn, { ascending: sortDirection === 'asc' });
+      }
+
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      query = query.range(from, to);
+
+      const { data: viewData, error: viewError, count } = await query;
+      if (viewError) throw viewError;
+
+      let emailsWithOrders = (viewData || []).map((row: OrderEmailsView) =>
+        transformViewToEmailWithOrder(row)
+      );
+
       if (sortColumn === 'status') {
         emailsWithOrders.sort((a, b) => {
           const orderA = getEmailStatusOrder(a);
@@ -218,7 +107,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsResult {
       }
 
       setEmails(emailsWithOrders);
-      setTotalCount(totalFilteredCount);
+      setTotalCount(count ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch emails');
     } finally {

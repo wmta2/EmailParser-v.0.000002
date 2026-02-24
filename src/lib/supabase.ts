@@ -430,3 +430,161 @@ export interface DeliveryAddressSyncItem {
   error_message: string | null;
   created_at: string;
 }
+
+export type ComputedStatus = 'unparsed' | 'pending' | 'confirmed' | 'exported' | 'export_failed' | 'failed' | 'unknown';
+
+export interface OrderEmailsView {
+  email_id: number;
+  email_created_at: string;
+  email_content: string | null;
+  email_customer_id: number | null;
+  email_date_parsed: string | null;
+  email_subject: string | null;
+  email_from_email: string | null;
+  email_html_body: string | null;
+  email_message_id: string | null;
+  email_date_received: string | null;
+  email_platform: string | null;
+  order_id: string | null;
+  order_raw_email_id: number | null;
+  order_order_number: string | null;
+  order_notes: string | null;
+  order_requester: string | null;
+  order_template_type: string | null;
+  order_parsing_status: 'pending' | 'confirmed' | 'failed' | null;
+  order_parsing_error: string | null;
+  order_parsed_at: string | null;
+  order_created_at: string | null;
+  order_channel_source: string | null;
+  order_channel_id: string | null;
+  order_customer_id: string | null;
+  order_external_order_id: string | null;
+  order_channel_customer_id: string | null;
+  order_order_status: string | null;
+  order_currency: string | null;
+  order_order_total: number | null;
+  order_shipping_total: number | null;
+  order_tax_total: number | null;
+  order_discount_total: number | null;
+  order_confirmed_at: string | null;
+  order_confirmed_by: string | null;
+  order_supplier_code: string | null;
+  order_required_date: string | null;
+  order_delivery_name: string | null;
+  order_delivery_address1: string | null;
+  order_delivery_address2: string | null;
+  order_delivery_address3: string | null;
+  order_delivery_address4: string | null;
+  order_delivery_address5: string | null;
+  order_delivery_town: string | null;
+  order_delivery_county: string | null;
+  order_delivery_postcode: string | null;
+  order_delivery_country: string | null;
+  order_delivery_country_code: string | null;
+  order_delivery_email: string | null;
+  order_delivery_telephone: string | null;
+  order_delivery_phone_extension: string | null;
+  order_delivery_mobile: string | null;
+  order_billing_name: string | null;
+  order_billing_address1: string | null;
+  order_billing_address2: string | null;
+  order_billing_address3: string | null;
+  order_billing_address4: string | null;
+  order_billing_address5: string | null;
+  order_billing_town: string | null;
+  order_billing_county: string | null;
+  order_billing_postcode: string | null;
+  order_billing_country: string | null;
+  order_billing_country_code: string | null;
+  order_billing_email: string | null;
+  order_billing_telephone: string | null;
+  order_billing_phone_extension: string | null;
+  order_billing_mobile: string | null;
+  order_account_number: string | null;
+  order_full_address: string | null;
+  order_ow_export_status: 'exported' | 'export_failed' | null;
+  computed_status: ComputedStatus;
+}
+
+export function transformViewToEmailWithOrder(viewRow: OrderEmailsView): EmailWithOrder {
+  const email: RawEmail = {
+    id: viewRow.email_id,
+    created_at: viewRow.email_created_at,
+    content: viewRow.email_content,
+    customer_id: viewRow.email_customer_id,
+    date_parsed: viewRow.email_date_parsed,
+    subject: viewRow.email_subject,
+    from_email: viewRow.email_from_email,
+    html_body: viewRow.email_html_body,
+    message_id: viewRow.email_message_id,
+    date_received: viewRow.email_date_received,
+    platform: viewRow.email_platform,
+  };
+
+  if (viewRow.order_id) {
+    const order: Order = {
+      id: viewRow.order_id,
+      raw_email_id: viewRow.order_raw_email_id,
+      order_number: viewRow.order_order_number || '',
+      notes: viewRow.order_notes || '',
+      requester: viewRow.order_requester || '',
+      supplier_code: viewRow.order_supplier_code || '',
+      template_type: viewRow.order_template_type || '',
+      parsing_status: viewRow.order_parsing_status || 'pending',
+      parsing_error: viewRow.order_parsing_error,
+      parsed_at: viewRow.order_parsed_at,
+      confirmed_at: viewRow.order_confirmed_at,
+      confirmed_by: viewRow.order_confirmed_by,
+      ow_export_status: viewRow.order_ow_export_status,
+      created_at: viewRow.order_created_at || '',
+      channel_source: viewRow.order_channel_source || '',
+      channel_id: viewRow.order_channel_id,
+      customer_id: viewRow.order_customer_id,
+      external_order_id: viewRow.order_external_order_id,
+      channel_customer_id: viewRow.order_channel_customer_id,
+      order_status: viewRow.order_order_status || '',
+      currency: viewRow.order_currency || '',
+      order_total: viewRow.order_order_total || 0,
+      shipping_total: viewRow.order_shipping_total || 0,
+      tax_total: viewRow.order_tax_total || 0,
+      discount_total: viewRow.order_discount_total || 0,
+      required_date: viewRow.order_required_date,
+      delivery_name: viewRow.order_delivery_name,
+      delivery_address1: viewRow.order_delivery_address1,
+      delivery_address2: viewRow.order_delivery_address2,
+      delivery_address3: viewRow.order_delivery_address3,
+      delivery_address4: viewRow.order_delivery_address4,
+      delivery_address5: viewRow.order_delivery_address5,
+      delivery_town: viewRow.order_delivery_town,
+      delivery_county: viewRow.order_delivery_county,
+      delivery_postcode: viewRow.order_delivery_postcode,
+      delivery_country: viewRow.order_delivery_country,
+      delivery_country_code: viewRow.order_delivery_country_code,
+      delivery_email: viewRow.order_delivery_email,
+      delivery_telephone: viewRow.order_delivery_telephone,
+      delivery_phone_extension: viewRow.order_delivery_phone_extension,
+      delivery_mobile: viewRow.order_delivery_mobile,
+      billing_name: viewRow.order_billing_name,
+      billing_address1: viewRow.order_billing_address1,
+      billing_address2: viewRow.order_billing_address2,
+      billing_address3: viewRow.order_billing_address3,
+      billing_address4: viewRow.order_billing_address4,
+      billing_address5: viewRow.order_billing_address5,
+      billing_town: viewRow.order_billing_town,
+      billing_county: viewRow.order_billing_county,
+      billing_postcode: viewRow.order_billing_postcode,
+      billing_country: viewRow.order_billing_country,
+      billing_country_code: viewRow.order_billing_country_code,
+      billing_email: viewRow.order_billing_email,
+      billing_telephone: viewRow.order_billing_telephone,
+      billing_phone_extension: viewRow.order_billing_phone_extension,
+      billing_mobile: viewRow.order_billing_mobile,
+      account_number: viewRow.order_account_number,
+      full_address: viewRow.order_full_address,
+    };
+
+    return { ...email, order };
+  }
+
+  return email;
+}
