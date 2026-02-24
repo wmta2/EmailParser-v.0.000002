@@ -1,27 +1,13 @@
 import { useCallback } from 'react';
 import { supabase, type Customer } from '../lib/supabase';
-import { findCustomerMatch } from '../lib/customerMatcher';
+import { findCustomerMatch, type CustomerMatchCriteria } from '../lib/customerMatcher';
 
-export type { MatchMethod, CustomerMatchResult } from '../lib/customerMatcher';
+export type { MatchMethod, CustomerMatchResult, CustomerMatchCriteria } from '../lib/customerMatcher';
 
 export function useCustomerMatch() {
   const findCustomerMatches = useCallback(
-    async (
-      supplierCode?: string | null,
-      deliveryPostcode?: string | null,
-      billingPostcode?: string | null,
-      requester?: string | null,
-      deliveryName?: string | null,
-      accountNumber?: string | null
-    ) => {
-      return findCustomerMatch(
-        supplierCode,
-        deliveryPostcode,
-        billingPostcode,
-        requester,
-        deliveryName,
-        accountNumber
-      );
+    async (criteria: CustomerMatchCriteria) => {
+      return findCustomerMatch(criteria);
     },
     []
   );

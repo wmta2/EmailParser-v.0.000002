@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useEmailDetail, type ParsedOrderData, type DetectionResult } from '../hooks/useEmails';
-import { useCustomerMatch, type MatchMethod } from '../hooks/useCustomerMatch';
+import { useCustomerMatch, type MatchMethod, type CustomerMatchCriteria } from '../hooks/useCustomerMatch';
 import { OrderExportPanel } from './OrderExportPanel';
 import { OrderItemsTable } from './OrderItemsTable';
 import { EditableTextField, EditableTextArea, EditableDateField, EditableNumberField } from './EditableField';
@@ -570,12 +570,14 @@ export function EmailDetailView({ emailId, onClose }: EmailDetailViewProps) {
                     <div>
                       <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Matched Customer</p>
                       <CustomerMatchPanel
-                        supplierCode={editedOrder?.supplier_code}
-                        deliveryPostcode={editedOrder?.delivery_postcode}
-                        billingPostcode={editedOrder?.billing_postcode}
-                        requester={editedOrder?.requester}
-                        deliveryName={editedOrder?.delivery_name}
-                        accountNumber={editedOrder?.account_number}
+                        criteria={{
+                          accountNumber: editedOrder?.account_number,
+                          supplierCode: editedOrder?.supplier_code,
+                          deliveryPostcode: editedOrder?.delivery_postcode,
+                          billingPostcode: editedOrder?.billing_postcode,
+                          requester: editedOrder?.requester,
+                          deliveryName: editedOrder?.delivery_name,
+                        }}
                         selectedCustomerId={selectedCustomerId}
                         onSelectCustomer={handleSelectCustomer}
                         searchCustomers={searchCustomers}

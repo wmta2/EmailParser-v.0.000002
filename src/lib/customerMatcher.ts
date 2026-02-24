@@ -1,4 +1,4 @@
-import { supabase, type Customer } from './supabase';
+import { supabase, type Customer, type Order } from './supabase';
 
 export type MatchMethod = 'account_number' | 'supplier_code' | 'postcode' | 'manual';
 
@@ -6,6 +6,15 @@ export interface CustomerMatchResult {
   bestMatch: Customer | null;
   candidates: Customer[];
   matchMethod: MatchMethod | null;
+}
+
+export interface CustomerMatchCriteria {
+  accountNumber?: string | null;
+  supplierCode?: string | null;
+  deliveryPostcode?: string | null;
+  billingPostcode?: string | null;
+  requester?: string | null;
+  deliveryName?: string | null;
 }
 
 function normalisePostcode(pc: string | null | undefined): string {
@@ -23,60 +32,62 @@ function nameWordsMatch(
 }
 
 export async function findCustomerMatch(
-  supplierCode?: string | null,
-  deliveryPostcode?: string | null,
-  billingPostcode?: string | null,
-  requester?: string | null,
-  deliveryName?: string | null,
-  accountNumber?: string | null
+  criteria: CustomerMatchCriteria
 ): Promise<CustomerMatchResult> {
-  const { data: allCustomers } = await supabase
-    .from('customers')
-    .select('*')
-    .order('name', { ascending: true });
+  if (criteria.accountNumber) {
+    const { data } = await supabase
+      .from('customers')
+      .select('*')
+      .ilike('account_number', criteria.accountNumber)
+      .maybeSingle();
 
-  const customers: Customer[] = allCustomers ?? [];
-
-  if (accountNumber) {
-    const match = customers.find(
-      c => c.account_number && c.account_number.toLowerCase() === accountNumber.toLowerCase()
-    );
-    if (match) {
+    if (data) {
       return {
-        bestMatch: match,
-        candidates: [match],
+        bestMatch: data,
+        candidates: [data],
         matchMethod: 'account_number',
       };
     }
   }
 
-  if (supplierCode) {
-    const match = customers.find(
-      c => c.supplier_code && c.supplier_code.toLowerCase() === supplierCode.toLowerCase()
-    );
-    if (match) {
+  if (criteria.supplierCode) {
+    const { data } = await supabase
+      .from('customers')
+      .select('*')
+      .ilike('supplier_code', criteria.supplierCode)
+      .maybeSingle();
+
+    if (data) {
       return {
-        bestMatch: match,
-        candidates: [match],
+        bestMatch: data,
+        candidates: [data],
         matchMethod: 'supplier_code',
       };
     }
   }
 
-  const targetPostcodes = [deliveryPostcode, billingPostcode]
+  const targetPostcodes = [criteria.deliveryPostcode, criteria.billingPostcode]
     .map(normalisePostcode)
     .filter(Boolean);
 
   if (targetPostcodes.length > 0) {
-    const postcodeMatches = customers.filter(c => {
-      const custPostcodes = [c.shipping_postcode, c.billing_postcode].map(normalisePostcode);
-      return targetPostcodes.some(tp => custPostcodes.includes(tp));
-    });
+    const orConditions = targetPostcodes.flatMap(pc => [
+      `shipping_postcode.ilike.${pc}`,
+      `billing_postcode.ilike.${pc}`
+    ]).join(',');
 
-    if (postcodeMatches.length > 0) {
-      const nameHints = [requester, deliveryName].filter(Boolean);
+    const { data: postcodeMatches } = await supabase
+      .from('customers')
+      .select('*')
+      .or(orConditions)
+      .order('name', { ascending: true });
+
+    const customers = postcodeMatches ?? [];
+
+    if (customers.length > 0) {
+      const nameHints = [criteria.requester, criteria.deliveryName].filter(Boolean);
       if (nameHints.length > 0) {
-        const nameFiltered = postcodeMatches.filter(c =>
+        const nameFiltered = customers.filter(c =>
           nameHints.some(hint => nameWordsMatch(hint, c.name))
         );
         if (nameFiltered.length > 0) {
@@ -89,8 +100,8 @@ export async function findCustomerMatch(
       }
 
       return {
-        bestMatch: postcodeMatches.length === 1 ? postcodeMatches[0] : null,
-        candidates: postcodeMatches,
+        bestMatch: customers.length === 1 ? customers[0] : null,
+        candidates: customers,
         matchMethod: 'postcode',
       };
     }
@@ -100,5 +111,16 @@ export async function findCustomerMatch(
     bestMatch: null,
     candidates: [],
     matchMethod: null,
+  };
+}
+
+export function extractMatchCriteriaFromOrder(order: Order): CustomerMatchCriteria {
+  return {
+    accountNumber: order.account_number,
+    supplierCode: order.supplier_code,
+    deliveryPostcode: order.delivery_postcode,
+    billingPostcode: order.billing_postcode,
+    requester: order.requester,
+    deliveryName: order.delivery_name,
   };
 }

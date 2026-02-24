@@ -1,28 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Search, User } from 'lucide-react';
-import { useCustomerMatch, type CustomerMatchResult, type MatchMethod } from '../hooks/useCustomerMatch';
+import { useCustomerMatch, type CustomerMatchResult, type MatchMethod, type CustomerMatchCriteria } from '../hooks/useCustomerMatch';
 import type { Customer } from '../lib/supabase';
 import { TIMING } from '../lib/constants';
 
 interface CustomerMatchPanelProps {
-  supplierCode?: string | null;
-  deliveryPostcode?: string | null;
-  billingPostcode?: string | null;
-  requester?: string | null;
-  deliveryName?: string | null;
-  accountNumber?: string | null;
+  criteria: CustomerMatchCriteria;
   selectedCustomerId: string | null;
   onSelectCustomer: (customer: Customer | null, method: MatchMethod) => void;
   searchCustomers: (q: string) => Promise<Customer[]>;
 }
 
 export function CustomerMatchPanel({
-  supplierCode,
-  deliveryPostcode,
-  billingPostcode,
-  requester,
-  deliveryName,
-  accountNumber,
+  criteria,
   selectedCustomerId,
   onSelectCustomer,
   searchCustomers,
@@ -43,14 +33,7 @@ export function CustomerMatchPanel({
     let cancelled = false;
     async function run() {
       setLoadingMatch(true);
-      const result = await findCustomerMatches(
-        supplierCode,
-        deliveryPostcode,
-        billingPostcode,
-        requester,
-        deliveryName,
-        accountNumber
-      );
+      const result = await findCustomerMatches(criteria);
       if (!cancelled) {
         setMatchResult(result);
         if (result.bestMatch && !selectedCustomerId) {
@@ -61,7 +44,7 @@ export function CustomerMatchPanel({
     }
     run();
     return () => { cancelled = true; };
-  }, [supplierCode, deliveryPostcode, billingPostcode, requester, deliveryName, accountNumber]);
+  }, [criteria.accountNumber, criteria.supplierCode, criteria.deliveryPostcode, criteria.billingPostcode, criteria.requester, criteria.deliveryName]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase, type RawEmail, type Order, type OrderItem, type EmailWithOrder, type OrderExport, type Customer } from '../lib/supabase';
 import { parseEmail, detectTemplate, type ParsedOrderData, type DetectionResult } from '../lib/emailParser';
-import { findCustomerMatch } from '../lib/customerMatcher';
+import { findCustomerMatch, type CustomerMatchCriteria } from '../lib/customerMatcher';
 export type EmailSortColumn = 'created_at' | 'subject' | 'from_email' | 'platform' | 'status';
 export type EmailSortDirection = 'asc' | 'desc';
 
@@ -190,13 +190,15 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsResult {
         return { success: false, message: 'Failed to parse email - unknown template' };
       }
 
-      const matchResult = await findCustomerMatch(
-        parsedData.order.supplier_code,
-        parsedData.order.delivery_postcode,
-        parsedData.order.billing_postcode,
-        parsedData.order.requester,
-        parsedData.order.delivery_name
-      );
+      const criteria: CustomerMatchCriteria = {
+        accountNumber: parsedData.order.account_number,
+        supplierCode: parsedData.order.supplier_code,
+        deliveryPostcode: parsedData.order.delivery_postcode,
+        billingPostcode: parsedData.order.billing_postcode,
+        requester: parsedData.order.requester,
+        deliveryName: parsedData.order.delivery_name,
+      };
+      const matchResult = await findCustomerMatch(criteria);
       const customerId = matchResult.bestMatch?.id ?? null;
 
       const now = new Date().toISOString();
@@ -421,13 +423,15 @@ export function useEmailDetail(emailId: number | null) {
       let suggestedCustomerId: string | null = null;
       let suggestedCustomer: Customer | null = null;
       if (parsedData) {
-        const matchResult = await findCustomerMatch(
-          parsedData.order.supplier_code,
-          parsedData.order.delivery_postcode,
-          parsedData.order.billing_postcode,
-          parsedData.order.requester,
-          parsedData.order.delivery_name
-        );
+        const criteria: CustomerMatchCriteria = {
+          accountNumber: parsedData.order.account_number,
+          supplierCode: parsedData.order.supplier_code,
+          deliveryPostcode: parsedData.order.delivery_postcode,
+          billingPostcode: parsedData.order.billing_postcode,
+          requester: parsedData.order.requester,
+          deliveryName: parsedData.order.delivery_name,
+        };
+        const matchResult = await findCustomerMatch(criteria);
         suggestedCustomer = matchResult.bestMatch ?? null;
         suggestedCustomerId = suggestedCustomer?.id ?? null;
       }

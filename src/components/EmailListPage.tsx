@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useEmails, type EmailSortColumn, type EmailSortDirection } from '../hooks/useEmails';
-import { useCustomerMatch } from '../hooks/useCustomerMatch';
+import { useCustomerMatch, type CustomerMatchCriteria } from '../hooks/useCustomerMatch';
 import { useOrderwiseExport } from '../hooks/useOrderwiseExport';
 import { EmailDetailView } from './EmailDetailView';
 import { ConfirmParseModal } from './ConfirmParseModal';
@@ -176,36 +176,31 @@ export function EmailListPage() {
       const results = await Promise.all(
         unparsedEmails.map(async email => {
           const fullEmail = fullEmailMap.get(email.id);
-          let supplierCode: string | null = null;
-          let deliveryPostcode: string | null = null;
-          let billingPostcode: string | null = null;
-          let requester: string | null = null;
-          let deliveryName: string | null = null;
-          let accountNumber: string | null = null;
+          const criteria: CustomerMatchCriteria = {
+            accountNumber: null,
+            supplierCode: null,
+            deliveryPostcode: null,
+            billingPostcode: null,
+            requester: null,
+            deliveryName: null,
+          };
 
           if (fullEmail) {
             try {
               const parsed = await parseEmail(fullEmail);
               if (parsed) {
-                accountNumber = parsed.order.account_number ?? null;
-                supplierCode = parsed.order.supplier_code ?? null;
-                deliveryPostcode = parsed.order.delivery_postcode ?? null;
-                billingPostcode = parsed.order.billing_postcode ?? null;
-                requester = parsed.order.requester ?? null;
-                deliveryName = parsed.order.delivery_name ?? null;
+                criteria.accountNumber = parsed.order.account_number ?? null;
+                criteria.supplierCode = parsed.order.supplier_code ?? null;
+                criteria.deliveryPostcode = parsed.order.delivery_postcode ?? null;
+                criteria.billingPostcode = parsed.order.billing_postcode ?? null;
+                criteria.requester = parsed.order.requester ?? null;
+                criteria.deliveryName = parsed.order.delivery_name ?? null;
               }
             } catch {
             }
           }
 
-          const result = await findCustomerMatches(
-            supplierCode,
-            deliveryPostcode,
-            billingPostcode,
-            requester,
-            deliveryName,
-            accountNumber
-          );
+          const result = await findCustomerMatches(criteria);
 
           return {
             id: email.id,
