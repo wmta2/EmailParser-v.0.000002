@@ -112,8 +112,8 @@ export function EmailListPage() {
     const orders = ordersResult.data ?? [];
     const exported = orders.filter(o => o.ow_export_status === 'exported').length;
     const exportFailed = orders.filter(o => o.ow_export_status === 'export_failed').length;
-    const pending = orders.filter(o => o.parsing_status === 'pending' && !o.ow_export_status).length;
-    const confirmed = orders.filter(o => o.parsing_status === 'confirmed' && !o.ow_export_status).length;
+    const pending = orders.filter(o => o.parsing_status === 'pending' && o.ow_export_status === null).length;
+    const confirmed = orders.filter(o => o.parsing_status === 'confirmed' && o.ow_export_status === null).length;
     const failed = orders.filter(o => o.parsing_status === 'failed').length;
     const parsed = orders.length;
     const unparsed = Math.max(0, total - parsed);
