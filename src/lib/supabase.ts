@@ -112,6 +112,8 @@ export interface Order {
   billing_telephone: string | null;
   billing_phone_extension: string | null;
   billing_mobile: string | null;
+  account_number: string | null;
+  full_address: string | null;
 }
 
 export interface OrderItem {

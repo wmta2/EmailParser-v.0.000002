@@ -181,11 +181,13 @@ export function EmailListPage() {
           let billingPostcode: string | null = null;
           let requester: string | null = null;
           let deliveryName: string | null = null;
+          let accountNumber: string | null = null;
 
           if (fullEmail) {
             try {
               const parsed = await parseEmail(fullEmail);
               if (parsed) {
+                accountNumber = parsed.order.account_number ?? null;
                 supplierCode = parsed.order.supplier_code ?? null;
                 deliveryPostcode = parsed.order.delivery_postcode ?? null;
                 billingPostcode = parsed.order.billing_postcode ?? null;
@@ -201,7 +203,8 @@ export function EmailListPage() {
             deliveryPostcode,
             billingPostcode,
             requester,
-            deliveryName
+            deliveryName,
+            accountNumber
           );
 
           return {
