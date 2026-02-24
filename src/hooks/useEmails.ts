@@ -160,7 +160,7 @@ export function useEmails(options: UseEmailsOptions = {}): UseEmailsResult {
         // Fetch orders with specific status, then get their emails
         let orderQuery = supabase
           .from('orders')
-          .select('*, raw_email!inner(*)', { count: 'exact' })
+          .select('*, raw_email!inner(id, created_at, subject, from_email, platform, message_id, date_received, customer_id, date_parsed)', { count: 'exact' })
           .eq('channel_source', 'email');
 
         // Apply status-specific filters
