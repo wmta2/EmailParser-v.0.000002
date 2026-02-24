@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useEmailDetail, type ParsedOrderData, type DetectionResult } from '../hooks/useEmails';
+import { useEmailDetail, type ParsedOrderData, type DetectionResult } from '../hooks/useEmailDetail';
 import { useCustomerMatch, type MatchMethod, type CustomerMatchCriteria } from '../hooks/useCustomerMatch';
 import { OrderExportPanel } from './OrderExportPanel';
 import { OrderItemsTable } from './OrderItemsTable';
