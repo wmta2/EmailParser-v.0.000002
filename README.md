@@ -1,0 +1,1 @@
+password-protected-invitation-only
