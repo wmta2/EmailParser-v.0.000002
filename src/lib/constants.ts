@@ -1,0 +1,17 @@
+export const TIMING = {
+  DEBOUNCE_SEARCH: 300,
+  MESSAGE_AUTO_DISMISS: 3000,
+  COPY_FEEDBACK_DURATION: 2000,
+} as const;
+
+export const PAGE_SIZE = 25;
+export const ITEMS_PER_PAGE = 20;
+
+export const ORDERWISE_VALUE_LISTS = {
+  ORDER_TYPE: 15,
+  DELIVERY_METHOD: 18,
+  TAX_RATE: 2,
+  STOCK_LOCATION: 4,
+  CURRENCY: 1,
+  PAYMENT_METHOD: 20,
+} as const;
