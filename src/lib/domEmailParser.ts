@@ -399,10 +399,15 @@ export class DOMEmailParser {
             );
             const node = result.singleNodeValue;
             if (node) {
-              const value = config.orderItems.columns.productCode.attribute && node.nodeType === Node.ELEMENT_NODE
+              const rawValue = config.orderItems.columns.productCode.attribute && node.nodeType === Node.ELEMENT_NODE
                 ? (node as Element).getAttribute(config.orderItems.columns.productCode.attribute)
                 : node.textContent?.trim();
-              if (value) item.product_code = value;
+              if (rawValue) {
+                const value = config.orderItems.columns.productCode.transform
+                  ? config.orderItems.columns.productCode.transform(rawValue)
+                  : rawValue;
+                item.product_code = value.trim();
+              }
             }
           }
 
@@ -417,10 +422,15 @@ export class DOMEmailParser {
             );
             const node = result.singleNodeValue;
             if (node) {
-              const value = config.orderItems.columns.sku.attribute && node.nodeType === Node.ELEMENT_NODE
+              const rawValue = config.orderItems.columns.sku.attribute && node.nodeType === Node.ELEMENT_NODE
                 ? (node as Element).getAttribute(config.orderItems.columns.sku.attribute)
                 : node.textContent?.trim();
-              if (value) item.sku = value;
+              if (rawValue) {
+                const value = config.orderItems.columns.sku.transform
+                  ? config.orderItems.columns.sku.transform(rawValue)
+                  : rawValue;
+                item.sku = value.trim();
+              }
             }
           }
 

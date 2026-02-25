@@ -25,6 +25,18 @@ import {
 } from 'lucide-react';
 import { ORDER_PARSING_STATUS_CONFIG as STATUS_CONFIG } from '../lib/statusConfig';
 
+function formatSubjectForDisplay(subject: string | null): string {
+  if (!subject) return 'No Subject';
+
+  // Apply text replacements for display (case-insensitive)
+  let formatted = subject;
+  formatted = formatted.replace(/ROSA S LONDON LTD/gi, 'ROSA');
+  formatted = formatted.replace(/PHO TRADING LTD -/gi, 'PHO -');
+  formatted = formatted.replace(/PATARA FINE THAI CUISINE/gi, 'PATARA -');
+
+  return formatted;
+}
+
 interface EmailDetailViewProps {
   emailId: number;
   onClose: () => void;
@@ -383,7 +395,7 @@ export function EmailDetailView({ emailId, onClose }: EmailDetailViewProps) {
                   <div className="space-y-3 mb-4">
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-500">Subject</span>
-                      <span className="text-slate-900 font-medium">{email.subject || 'No Subject'}</span>
+                      <span className="text-slate-900 font-medium">{formatSubjectForDisplay(email.subject)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-500">From</span>
@@ -450,7 +462,7 @@ export function EmailDetailView({ emailId, onClose }: EmailDetailViewProps) {
                     <div className="space-y-3 mb-4">
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500">Subject</span>
-                        <span className="text-slate-900 font-medium">{email.subject || 'No Subject'}</span>
+                        <span className="text-slate-900 font-medium">{formatSubjectForDisplay(email.subject)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500">From</span>
@@ -512,7 +524,7 @@ export function EmailDetailView({ emailId, onClose }: EmailDetailViewProps) {
                     <div className="space-y-3 mb-4">
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500">Subject</span>
-                        <span className="text-slate-900 font-medium">{email.subject || 'No Subject'}</span>
+                        <span className="text-slate-900 font-medium">{formatSubjectForDisplay(email.subject)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500">From</span>

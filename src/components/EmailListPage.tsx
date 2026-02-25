@@ -40,6 +40,18 @@ const METHOD_LABELS: Record<string, string> = {
   manual: 'Manual',
 };
 
+function formatSubjectForDisplay(subject: string | null): string {
+  if (!subject) return 'No Subject';
+
+  // Apply text replacements for display (case-insensitive)
+  let formatted = subject;
+  formatted = formatted.replace(/ROSA S LONDON LTD/gi, 'ROSA');
+  formatted = formatted.replace(/PHO TRADING LTD -/gi, 'PHO -');
+  formatted = formatted.replace(/PATARA FINE THAI CUISINE/gi, 'PATARA -');
+
+  return formatted;
+}
+
 export function EmailListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortColumn, setSortColumn] = useState<EmailSortColumn>('created_at');
@@ -393,20 +405,20 @@ export function EmailListPage() {
       const match = matchMap.get(email.id);
       if (match === undefined) {
         return (
-          <div className="max-w-[200px]">
+          <div className="max-w-[280px]">
             <div className="text-slate-400 text-xs truncate">{email.from_email || '-'}</div>
           </div>
         );
       }
       if (match === null) {
         return (
-          <div className="max-w-[200px] truncate text-slate-500" title={email.from_email || ''}>
+          <div className="max-w-[280px] truncate text-slate-500" title={email.from_email || ''}>
             {email.from_email || '-'}
           </div>
         );
       }
       return (
-        <div className="max-w-[200px]" title={email.from_email || ''}>
+        <div className="max-w-[280px]" title={email.from_email || ''}>
           <div className="flex items-center gap-1.5">
             <User className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
             <span className="text-sm font-medium text-slate-900 truncate">{match.customer.name}</span>
@@ -426,7 +438,7 @@ export function EmailListPage() {
     const customerId = email.order.customer_id;
     if (!customerId) {
       return (
-        <div className="max-w-[200px] truncate text-slate-500" title={email.from_email || ''}>
+        <div className="max-w-[280px] truncate text-slate-500" title={email.from_email || ''}>
           {email.from_email || '-'}
         </div>
       );
@@ -435,14 +447,14 @@ export function EmailListPage() {
     const customer = customerMap.get(customerId);
     if (!customer) {
       return (
-        <div className="max-w-[200px] truncate text-slate-500" title={email.from_email || ''}>
+        <div className="max-w-[280px] truncate text-slate-500" title={email.from_email || ''}>
           {email.from_email || '-'}
         </div>
       );
     }
 
     return (
-      <div className="max-w-[200px]" title={email.from_email || ''}>
+      <div className="max-w-[280px]" title={email.from_email || ''}>
         <div className="flex items-center gap-1.5">
           <User className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
           <span className="text-sm font-medium text-slate-900 truncate">{customer.name}</span>
@@ -773,7 +785,7 @@ export function EmailListPage() {
                         {getFromCell(email)}
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-900">
-                        <div className="max-w-xs truncate">{email.subject || 'No Subject'}</div>
+                        <div className="max-w-xs truncate">{formatSubjectForDisplay(email.subject)}</div>
                       </td>
                       {statusFilter === 'all' && (
                         <td className="px-6 py-4 whitespace-nowrap">
