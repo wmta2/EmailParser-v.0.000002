@@ -4,11 +4,12 @@ import { X, Copy, Check } from 'lucide-react';
 interface JsonPreviewModalProps {
   title: string;
   subtitle?: string;
-  json: Record<string, unknown> | unknown[] | null;
+  json: Record<string, unknown> | unknown[] | null | any;
   onClose: () => void;
+  invalidItemsCount?: number;
 }
 
-export function JsonPreviewModal({ title, subtitle, json, onClose }: JsonPreviewModalProps) {
+export function JsonPreviewModal({ title, subtitle, json, onClose, invalidItemsCount = 0 }: JsonPreviewModalProps) {
   const [copied, setCopied] = useState(false);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -79,6 +80,16 @@ export function JsonPreviewModal({ title, subtitle, json, onClose }: JsonPreview
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto p-4">
+          {invalidItemsCount > 0 && (
+            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800 font-medium">
+                ⚠️ {invalidItemsCount} item{invalidItemsCount > 1 ? 's have' : ' has'} invalid or missing product codes and will likely fail during export
+              </p>
+              <p className="text-xs text-red-700 mt-1">
+                Lines with invalid codes are highlighted in red below
+              </p>
+            </div>
+          )}
           {json ? (
             <pre className="bg-slate-900 text-slate-200 p-4 rounded-lg text-xs font-mono leading-relaxed">
               {highlightJson(formattedJson)}
@@ -103,16 +114,59 @@ export function JsonPreviewModal({ title, subtitle, json, onClose }: JsonPreview
 function highlightJson(jsonString: string): React.ReactNode {
   const lines = jsonString.split('\n');
 
+  // Track if we're inside an orderLine with invalid variantCode
+  let isInvalidOrderLine = false;
+  let braceDepth = 0;
+  let orderLineDepth = -1;
+
   return lines.map((line, index) => {
-    const highlighted = line
+    // Check if this line starts an orderLine object
+    const trimmed = line.trim();
+
+    // Track brace depth
+    const openBraces = (line.match(/\{/g) || []).length;
+    const closeBraces = (line.match(/\}/g) || []).length;
+
+    // Check if we're entering an orderLine
+    if (trimmed === '{' && index > 0) {
+      const prevLine = lines[index - 1]?.trim();
+      if (prevLine && !prevLine.includes('orderLines')) {
+        braceDepth++;
+        // This is likely an orderLine object
+        orderLineDepth = braceDepth;
+      }
+    } else {
+      braceDepth += openBraces - closeBraces;
+    }
+
+    // Check for invalid variantCode (undefined, empty, or missing)
+    if (line.includes('"variantCode"')) {
+      if (line.includes('undefined') || line.match(/"variantCode":\s*""/) || line.match(/"variantCode":\s*null/)) {
+        isInvalidOrderLine = true;
+      } else {
+        isInvalidOrderLine = false;
+      }
+    }
+
+    // Reset when we exit the orderLine object
+    if (isInvalidOrderLine && orderLineDepth >= 0 && braceDepth < orderLineDepth) {
+      isInvalidOrderLine = false;
+      orderLineDepth = -1;
+    }
+
+    let highlighted = line
       .replace(/"([^"]+)":/g, '<span class="text-sky-400">"$1"</span>:')
       .replace(/: "([^"]*)"/g, ': <span class="text-amber-300">"$1"</span>')
       .replace(/: (\d+\.?\d*)/g, ': <span class="text-emerald-400">$1</span>')
       .replace(/: (true|false)/g, ': <span class="text-purple-400">$1</span>')
-      .replace(/: (null)/g, ': <span class="text-slate-500">$1</span>');
+      .replace(/: (null)/g, ': <span class="text-slate-500">$1</span>')
+      .replace(/: (undefined)/g, ': <span class="text-red-400 font-bold">$1</span>');
+
+    // Apply red background to invalid orderLine entries
+    const lineClass = isInvalidOrderLine ? 'bg-red-900/30 border-l-2 border-red-500 pl-2 -ml-2' : '';
 
     return (
-      <span key={index}>
+      <span key={index} className={lineClass}>
         <span dangerouslySetInnerHTML={{ __html: highlighted }} />
         {index < lines.length - 1 && '\n'}
       </span>

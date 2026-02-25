@@ -11,6 +11,7 @@ import {
 import { useOrderwiseExport } from '../hooks/useOrderwiseExport';
 import { mapOrderToOrderwise } from '../lib/erp/orderwiseMapping';
 import { JsonPreviewModal } from './JsonPreviewModal';
+import { isValidProductCode } from '../lib/textSanitizer';
 import {
   Upload,
   CheckCircle,
@@ -71,6 +72,13 @@ export function OrderExportPanel({ order, items, customer, onExported }: Props) 
   const creds = useMemo(() => config?.credentials ?? {}, [config]);
 
   const exportableItems = useMemo(() => items.filter(item => item.export_to_erp), [items]);
+
+  const invalidItemsCount = useMemo(() => {
+    return exportableItems.filter(item => {
+      const code = item.sku || item.product_code;
+      return !code || !isValidProductCode(code);
+    }).length;
+  }, [exportableItems]);
 
   const jsonPayload = useMemo(() => {
     const mappingConfig = {
@@ -343,6 +351,7 @@ export function OrderExportPanel({ order, items, customer, onExported }: Props) 
           title="Orderwise Export Preview"
           subtitle={`Order ${order.order_number || 'N/A'}${exportableItems.length < items.length ? ` (${exportableItems.length} of ${items.length} items)` : ''}`}
           json={jsonPayload}
+          invalidItemsCount={invalidItemsCount}
           onClose={() => setShowJsonModal(false)}
         />
       )}

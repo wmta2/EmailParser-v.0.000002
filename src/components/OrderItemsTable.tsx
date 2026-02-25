@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Package, AlertCircle } from 'lucide-react';
 import { supabase, type OrderItem } from '../lib/supabase';
 import { parseFailedVariantCodes, isItemFailed, type FailedVariant } from '../lib/errorParser';
+import { isValidProductCode } from '../lib/textSanitizer';
 
 interface Props {
   items: OrderItem[];
@@ -17,6 +18,13 @@ export function OrderItemsTable({ items, latestErrorResponse, onItemsChange, dis
 
   const failedVariants = parseFailedVariantCodes(latestErrorResponse ?? null);
   const exportableCount = items.filter(i => i.export_to_erp).length;
+
+  function hasInvalidCode(item: OrderItem): boolean {
+    const code = item.sku || item.product_code;
+    return !code || !isValidProductCode(code);
+  }
+
+  const invalidItemsCount = items.filter(i => i.export_to_erp && hasInvalidCode(i)).length;
 
   async function handleToggleExport(item: OrderItem) {
     const newValue = !item.export_to_erp;
@@ -53,8 +61,10 @@ export function OrderItemsTable({ items, latestErrorResponse, onItemsChange, dis
       return 'hover:bg-slate-50';
     }
     const isFailed = isItemFailed(item.sku || item.product_code, failedVariants);
+    const isInvalid = hasInvalidCode(item);
 
-    if (isFailed && !isExcluded) {
+    // Highlight invalid codes or failed exports in red (prioritize if not excluded)
+    if ((isInvalid || isFailed) && !isExcluded) {
       return 'bg-red-50 border-l-4 border-l-red-400';
     }
     if (isExcluded) {
@@ -73,10 +83,14 @@ export function OrderItemsTable({ items, latestErrorResponse, onItemsChange, dis
             ({exportableCount} of {items.length} selected for export)
           </span>
         </div>
-        {failedVariants.length > 0 && (
+        {(failedVariants.length > 0 || invalidItemsCount > 0) && (
           <div className="flex items-center gap-1.5 text-xs text-red-600">
             <AlertCircle className="w-3.5 h-3.5" />
-            <span>{failedVariants.length} failed item(s) detected</span>
+            <span>
+              {invalidItemsCount > 0 && `${invalidItemsCount} invalid code(s)`}
+              {invalidItemsCount > 0 && failedVariants.length > 0 && ', '}
+              {failedVariants.length > 0 && `${failedVariants.length} failed export(s)`}
+            </span>
           </div>
         )}
       </div>
@@ -116,6 +130,7 @@ export function OrderItemsTable({ items, latestErrorResponse, onItemsChange, dis
             <tbody className="divide-y divide-slate-200">
               {items.map(item => {
                 const isFailed = isItemFailed(item.sku || item.product_code, failedVariants);
+                const isInvalid = hasInvalidCode(item);
                 const isUpdating = updatingItems.has(item.id);
 
                 return (
@@ -150,12 +165,12 @@ export function OrderItemsTable({ items, latestErrorResponse, onItemsChange, dis
                             Not exported
                           </span>
                         )}
-                        {isFailed && item.export_to_erp && (
+                        {(isInvalid || isFailed) && item.export_to_erp && (
                           <div className="group relative">
                             <AlertCircle className="w-4 h-4 text-red-500" />
                             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10">
                               <div className="bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
-                                This item failed during the last export attempt
+                                {isInvalid ? 'Invalid or missing product code - will fail export' : 'This item failed during the last export attempt'}
                               </div>
                             </div>
                           </div>
@@ -163,7 +178,7 @@ export function OrderItemsTable({ items, latestErrorResponse, onItemsChange, dis
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-sm font-mono ${isFailed && item.export_to_erp ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
+                      <span className={`text-sm font-mono ${(isInvalid || isFailed) && item.export_to_erp ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
                         {item.sku || item.product_code || '-'}
                       </span>
                     </td>
