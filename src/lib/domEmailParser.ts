@@ -6,6 +6,7 @@
  */
 
 import { evaluateXPathAsString } from './domUtils';
+import { sanitizeText, sanitizeProductCode, isValidProductCode } from './textSanitizer';
 
 export interface DOMParserConfig {
   orderNumber?: {
@@ -406,7 +407,10 @@ export class DOMEmailParser {
                 const value = config.orderItems.columns.productCode.transform
                   ? config.orderItems.columns.productCode.transform(rawValue)
                   : rawValue;
-                item.product_code = value.trim();
+                const sanitized = sanitizeProductCode(value);
+                if (sanitized) {
+                  item.product_code = sanitized;
+                }
               }
             }
           }
@@ -429,7 +433,10 @@ export class DOMEmailParser {
                 const value = config.orderItems.columns.sku.transform
                   ? config.orderItems.columns.sku.transform(rawValue)
                   : rawValue;
-                item.sku = value.trim();
+                const sanitized = sanitizeProductCode(value);
+                if (sanitized) {
+                  item.sku = sanitized;
+                }
               }
             }
           }
@@ -527,8 +534,21 @@ export class DOMEmailParser {
             item.total = (item.quantity * item.unit_price) + (item.tax || 0);
           }
 
-          // Only add item if it has at least a product name
+          // Sanitize product name
           if (item.product_name) {
+            item.product_name = sanitizeText(item.product_name);
+          }
+
+          // Only add item if it has a valid product name and at least one valid code
+          if (item.product_name) {
+            const hasValidCode = isValidProductCode(item.product_code) || isValidProductCode(item.sku);
+            if (!hasValidCode) {
+              console.warn('Skipping order item with invalid or missing product code/SKU:', {
+                product_name: item.product_name,
+                product_code: item.product_code,
+                sku: item.sku
+              });
+            }
             items.push(item);
           }
         }

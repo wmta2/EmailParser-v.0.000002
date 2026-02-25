@@ -1,4 +1,5 @@
 import type { Order, OrderItem, Customer } from '../supabase';
+import { isValidProductCode } from '../textSanitizer';
 
 export interface OrderwiseSalesOrder {
   customer: OrderwiseCustomer;
@@ -215,11 +216,25 @@ export function mapOrderToOrderwise(
     ? items.filter(item => item.export_to_erp)
     : items;
 
-  const owLines: OrderwiseOrderLine[] = itemsToExport.map(item => ({
-    quantity: item.quantity,
-    variantCode: item.sku || item.product_code || undefined,
-    calculateLineSystemPrice: true,
-  }));
+  const owLines: OrderwiseOrderLine[] = itemsToExport
+    .filter(item => {
+      const code = item.sku || item.product_code;
+      const isValid = code && isValidProductCode(code);
+      if (!isValid) {
+        console.warn('Skipping order item with invalid product code/SKU for export:', {
+          product_name: item.product_name,
+          product_code: item.product_code,
+          sku: item.sku,
+          order_id: order.id
+        });
+      }
+      return isValid;
+    })
+    .map(item => ({
+      quantity: item.quantity,
+      variantCode: item.sku || item.product_code || undefined,
+      calculateLineSystemPrice: true,
+    }));
 
   return {
     customer: owCustomer,

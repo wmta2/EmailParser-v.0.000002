@@ -3,6 +3,7 @@ import type { RawEmail, Order } from '../supabase';
 import { parseEmail, detectTemplate } from '../emailParser';
 import { findCustomerMatch, type CustomerMatchCriteria } from '../customerMatcher';
 import type { ParsedOrderData } from '../emailParser';
+import { sanitizeOrderItem } from '../textSanitizer';
 
 let emailChannelIdCache: string | null = null;
 
@@ -114,10 +115,12 @@ export async function parseAndCreateOrder(
     if (orderError) throw orderError;
 
     if (parsedData.items.length > 0) {
-      const itemsToInsert = parsedData.items.map(item => ({
-        ...item,
-        order_id: orderData.id
-      }));
+      const itemsToInsert = parsedData.items
+        .map(item => sanitizeOrderItem(item))
+        .map(item => ({
+          ...item,
+          order_id: orderData.id
+        }));
 
       const { error: itemsError } = await supabase
         .from('order_items')
