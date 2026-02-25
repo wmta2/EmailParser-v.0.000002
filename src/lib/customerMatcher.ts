@@ -71,16 +71,36 @@ export async function findCustomerMatch(
     .filter(Boolean);
 
   if (targetPostcodes.length > 0) {
-    const orConditions = targetPostcodes.flatMap(pc => [
-      `shipping_postcode.ilike.${pc}`,
-      `billing_postcode.ilike.${pc}`
-    ]).join(',');
+    // Build SQL WHERE clause that normalizes postcodes on both sides
+    const whereConditions = targetPostcodes
+      .map(pc => {
+        // Validate postcode contains only alphanumeric characters for safety
+        if (!/^[A-Z0-9]+$/.test(pc)) return null;
+        return `(REPLACE(UPPER(shipping_postcode), ' ', '') = '${pc}' OR REPLACE(UPPER(billing_postcode), ' ', '') = '${pc}')`;
+      })
+      .filter(Boolean)
+      .join(' OR ');
 
-    const { data: postcodeMatches } = await supabase
-      .from('customers')
-      .select('*')
-      .or(orConditions)
-      .order('name', { ascending: true });
+    if (!whereConditions) {
+      return {
+        bestMatch: null,
+        candidates: [],
+        matchMethod: null,
+      };
+    }
+
+    const { data: postcodeMatches, error } = await supabase.rpc('find_customers_by_postcode', {
+      where_clause: whereConditions
+    });
+
+    if (error) {
+      console.error('Error finding customers by postcode:', error);
+      return {
+        bestMatch: null,
+        candidates: [],
+        matchMethod: null,
+      };
+    }
 
     const customers = postcodeMatches ?? [];
 
