@@ -440,7 +440,7 @@ export function EmailDetailView({ emailId, onClose }: EmailDetailViewProps) {
                 <div className="px-6 py-4 bg-slate-50 border border-t-0 border-slate-200 rounded-b-xl -mt-3">
                   <div className="flex justify-end gap-8 text-sm">
                     <div className="text-slate-900 font-semibold text-base">
-                      Total: ${displayItems.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
+                      Total: £{displayItems.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
                     </div>
                   </div>
                 </div>
@@ -683,7 +683,7 @@ export function EmailDetailView({ emailId, onClose }: EmailDetailViewProps) {
                         value={displayOrder.order_total || 0}
                         onChange={(value) => updateOrderField('order_total', value)}
                         editable={previewMode}
-                        prefix="$"
+                        prefix="£"
                       />
                     )}
                     {displayOrder.shipping_total !== undefined && (
@@ -692,7 +692,7 @@ export function EmailDetailView({ emailId, onClose }: EmailDetailViewProps) {
                         value={displayOrder.shipping_total || 0}
                         onChange={(value) => updateOrderField('shipping_total', value)}
                         editable={previewMode}
-                        prefix="$"
+                        prefix="£"
                       />
                     )}
                     {displayOrder.tax_total !== undefined && (
@@ -701,7 +701,7 @@ export function EmailDetailView({ emailId, onClose }: EmailDetailViewProps) {
                         value={displayOrder.tax_total || 0}
                         onChange={(value) => updateOrderField('tax_total', value)}
                         editable={previewMode}
-                        prefix="$"
+                        prefix="£"
                       />
                     )}
                     {displayOrder.discount_total !== undefined && (
@@ -710,7 +710,7 @@ export function EmailDetailView({ emailId, onClose }: EmailDetailViewProps) {
                         value={displayOrder.discount_total || 0}
                         onChange={(value) => updateOrderField('discount_total', value)}
                         editable={previewMode}
-                        prefix="$"
+                        prefix="£"
                       />
                     )}
                   </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Package, AlertCircle } from 'lucide-react';
 import { supabase, type OrderItem } from '../lib/supabase';
-import { parseFailedVariantCodes, isItemFailed, type FailedVariant } from '../lib/errorParser';
+import { parseFailedVariantCodesWithCounts, isItemFailed, type FailedVariant } from '../lib/errorParser';
 import { isValidProductCode } from '../lib/textSanitizer';
 
 interface Props {
@@ -16,7 +16,8 @@ interface Props {
 export function OrderItemsTable({ items, latestErrorResponse, onItemsChange, disabled = false, isPreviewMode = false, isExported = false }: Props) {
   const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set());
 
-  const failedVariants = parseFailedVariantCodes(latestErrorResponse ?? null);
+  const failedVariantData = parseFailedVariantCodesWithCounts(latestErrorResponse ?? null);
+  const failedVariants = failedVariantData.variants;
   const exportableCount = items.filter(i => i.export_to_erp).length;
 
   function hasInvalidCode(item: OrderItem): boolean {
@@ -83,13 +84,15 @@ export function OrderItemsTable({ items, latestErrorResponse, onItemsChange, dis
             ({exportableCount} of {items.length} selected for export)
           </span>
         </div>
-        {(failedVariants.length > 0 || invalidItemsCount > 0) && (
+        {(failedVariants.length > 0 || invalidItemsCount > 0 || failedVariantData.missingCount > 0) && (
           <div className="flex items-center gap-1.5 text-xs text-red-600">
             <AlertCircle className="w-3.5 h-3.5" />
             <span>
               {invalidItemsCount > 0 && `${invalidItemsCount} invalid code(s)`}
-              {invalidItemsCount > 0 && failedVariants.length > 0 && ', '}
-              {failedVariants.length > 0 && `${failedVariants.length} failed export(s)`}
+              {invalidItemsCount > 0 && (failedVariantData.notFoundCount > 0 || failedVariantData.missingCount > 0) && ', '}
+              {failedVariantData.notFoundCount > 0 && `${failedVariantData.notFoundCount} not found in ERP`}
+              {failedVariantData.notFoundCount > 0 && failedVariantData.missingCount > 0 && ', '}
+              {failedVariantData.missingCount > 0 && `${failedVariantData.missingCount} missing code(s)`}
             </span>
           </div>
         )}

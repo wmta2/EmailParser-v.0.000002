@@ -1,35 +1,68 @@
 export interface FailedVariant {
   code: string;
   reason?: string;
+  type: 'missing' | 'not_found';
+}
+
+export interface FailedVariantCounts {
+  missingCount: number;
+  notFoundCount: number;
+  variants: FailedVariant[];
 }
 
 export function parseFailedVariantCodes(errorResponse: Record<string, unknown> | null): FailedVariant[] {
-  if (!errorResponse) return [];
+  const result = parseFailedVariantCodesWithCounts(errorResponse);
+  return result.variants;
+}
+
+export function parseFailedVariantCodesWithCounts(errorResponse: Record<string, unknown> | null): FailedVariantCounts {
+  if (!errorResponse) return { missingCount: 0, notFoundCount: 0, variants: [] };
 
   const failedVariants: FailedVariant[] = [];
   const errorMessage = extractErrorMessage(errorResponse);
 
-  if (!errorMessage) return [];
+  if (!errorMessage) return { missingCount: 0, notFoundCount: 0, variants: [] };
 
-  const variantPatterns = [
-    /variant\s*(?:code)?[:\s]*["']?([A-Z0-9-]+)["']?/gi,
-    /product\s*(?:code)?[:\s]*["']?([A-Z0-9-]+)["']?/gi,
-    /sku[:\s]*["']?([A-Z0-9-]+)["']?/gi,
-    /["']([A-Z0-9]+-[A-Z0-9]+(?:-[A-Z0-9]+)*)["']/g,
-    /\b(\d{6,}-[A-Z0-9]+(?:-[A-Z0-9]+)*)\b/g,
-  ];
+  // Pattern 1: Detect codes that were rejected by the ERP (not found/inactive)
+  const notFoundPattern = /variant code:\s*([A-Z0-9-]+)\s+does not exist or is not active/gi;
+  let match;
+  while ((match = notFoundPattern.exec(errorMessage)) !== null) {
+    const code = match[1].toUpperCase();
+    if (!failedVariants.some(v => v.code === code)) {
+      failedVariants.push({
+        code,
+        reason: 'Not found in ERP or inactive',
+        type: 'not_found'
+      });
+    }
+  }
 
-  for (const pattern of variantPatterns) {
-    let match;
-    while ((match = pattern.exec(errorMessage)) !== null) {
-      const code = match[1].toUpperCase();
-      if (!failedVariants.some(v => v.code === code)) {
-        failedVariants.push({ code });
+  // Pattern 2: Detect missing/empty variant codes
+  const missingPattern = /no variant has been provided/gi;
+  const missingMatches = errorMessage.match(missingPattern);
+  const missingCount = missingMatches ? missingMatches.length : 0;
+
+  // For missing variants, we mark them with a special identifier
+  // since we don't have the actual code
+  if (missingCount > 0) {
+    // Extract order numbers to contextualize missing variants
+    const orderNumberPattern = /Order number (\d+)/gi;
+    let orderMatch;
+    const orderNumbers: string[] = [];
+    while ((orderMatch = orderNumberPattern.exec(errorMessage)) !== null) {
+      if (!orderNumbers.includes(orderMatch[1])) {
+        orderNumbers.push(orderMatch[1]);
       }
     }
   }
 
-  return failedVariants;
+  const notFoundCount = failedVariants.filter(v => v.type === 'not_found').length;
+
+  return {
+    missingCount,
+    notFoundCount,
+    variants: failedVariants
+  };
 }
 
 function extractErrorMessage(obj: Record<string, unknown>): string {

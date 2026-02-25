@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Copy, Check } from 'lucide-react';
+import { parseFailedVariantCodesWithCounts } from '../lib/errorParser';
 
 interface JsonPreviewModalProps {
   title: string;
@@ -7,10 +8,12 @@ interface JsonPreviewModalProps {
   json: Record<string, unknown> | unknown[] | null | any;
   onClose: () => void;
   invalidItemsCount?: number;
+  errorResponse?: Record<string, unknown> | null;
 }
 
-export function JsonPreviewModal({ title, subtitle, json, onClose, invalidItemsCount = 0 }: JsonPreviewModalProps) {
+export function JsonPreviewModal({ title, subtitle, json, onClose, invalidItemsCount = 0, errorResponse = null }: JsonPreviewModalProps) {
   const [copied, setCopied] = useState(false);
+  const failedVariantData = parseFailedVariantCodesWithCounts(errorResponse);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -80,19 +83,23 @@ export function JsonPreviewModal({ title, subtitle, json, onClose, invalidItemsC
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto p-4">
-          {invalidItemsCount > 0 && (
+          {(invalidItemsCount > 0 || failedVariantData.notFoundCount > 0 || failedVariantData.missingCount > 0) && (
             <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-800 font-medium">
-                ⚠️ {invalidItemsCount} item{invalidItemsCount > 1 ? 's have' : ' has'} invalid or missing product codes and will likely fail during export
+                ⚠️ {invalidItemsCount > 0 && `${invalidItemsCount} invalid code(s)`}
+                {invalidItemsCount > 0 && (failedVariantData.notFoundCount > 0 || failedVariantData.missingCount > 0) && ', '}
+                {failedVariantData.notFoundCount > 0 && `${failedVariantData.notFoundCount} not found in ERP`}
+                {failedVariantData.notFoundCount > 0 && failedVariantData.missingCount > 0 && ', '}
+                {failedVariantData.missingCount > 0 && `${failedVariantData.missingCount} missing code(s)`}
               </p>
               <p className="text-xs text-red-700 mt-1">
-                Lines with invalid codes are highlighted in red below
+                Lines with failed codes are highlighted in red below
               </p>
             </div>
           )}
           {json ? (
             <pre className="bg-slate-900 text-slate-200 p-4 rounded-lg text-xs font-mono leading-relaxed">
-              {highlightJson(formattedJson)}
+              {highlightJson(formattedJson, failedVariantData.variants)}
             </pre>
           ) : (
             <div className="flex items-center justify-center h-full text-slate-500">
@@ -111,7 +118,7 @@ export function JsonPreviewModal({ title, subtitle, json, onClose, invalidItemsC
   );
 }
 
-function highlightJson(jsonString: string): React.ReactNode {
+function highlightJson(jsonString: string, failedVariants: Array<{ code: string; type: 'missing' | 'not_found' }>): React.ReactNode {
   const lines = jsonString.split('\n');
 
   // Track if we're inside an orderLine with invalid variantCode
@@ -139,12 +146,20 @@ function highlightJson(jsonString: string): React.ReactNode {
       braceDepth += openBraces - closeBraces;
     }
 
-    // Check for invalid variantCode (undefined, empty, or missing)
+    // Check for invalid variantCode (undefined, empty, missing, or rejected by ERP)
     if (line.includes('"variantCode"')) {
       if (line.includes('undefined') || line.match(/"variantCode":\s*""/) || line.match(/"variantCode":\s*null/)) {
         isInvalidOrderLine = true;
       } else {
-        isInvalidOrderLine = false;
+        // Check if this variantCode matches any of the failed variants from ERP
+        const variantMatch = line.match(/"variantCode":\s*"([^"]+)"/);
+        if (variantMatch) {
+          const code = variantMatch[1].toUpperCase();
+          const isFailed = failedVariants.some(v => v.code === code);
+          isInvalidOrderLine = isFailed;
+        } else {
+          isInvalidOrderLine = false;
+        }
       }
     }
 

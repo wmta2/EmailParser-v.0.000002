@@ -261,14 +261,23 @@ export function OrderExportPanel({ order, items, customer, onExported }: Props) 
               </div>
             </div>
             <ExportLogDetail exp={latestExport} expanded={expandedLogs.has(latestExport.id)} onToggle={() => toggleLog(latestExport.id)} />
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-            >
-              <Upload className={`w-4 h-4 ${exporting ? 'animate-bounce' : ''}`} />
-              {exporting ? 'Retrying...' : 'Retry Export'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                <Upload className={`w-4 h-4 ${exporting ? 'animate-bounce' : ''}`} />
+                {exporting ? 'Retrying...' : 'Retry Export'}
+              </button>
+              <button
+                onClick={() => setShowJsonModal(true)}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                <FileCode className="w-4 h-4" />
+                Preview JSON
+              </button>
+            </div>
           </div>
         ) : latestExport?.export_status === 'processing' ? (
           <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
@@ -352,6 +361,7 @@ export function OrderExportPanel({ order, items, customer, onExported }: Props) 
           subtitle={`Order ${order.order_number || 'N/A'}${exportableItems.length < items.length ? ` (${exportableItems.length} of ${items.length} items)` : ''}`}
           json={jsonPayload}
           invalidItemsCount={invalidItemsCount}
+          errorResponse={latestExport?.export_status === 'failed' ? latestExport.response_payload : null}
           onClose={() => setShowJsonModal(false)}
         />
       )}
