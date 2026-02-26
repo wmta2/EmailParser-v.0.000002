@@ -71,26 +71,8 @@ export async function findCustomerMatch(
     .filter(Boolean);
 
   if (targetPostcodes.length > 0) {
-    // Build SQL WHERE clause that normalizes postcodes on both sides
-    const whereConditions = targetPostcodes
-      .map(pc => {
-        // Validate postcode contains only alphanumeric characters for safety
-        if (!/^[A-Z0-9]+$/.test(pc)) return null;
-        return `(REPLACE(UPPER(shipping_postcode), ' ', '') = '${pc}' OR REPLACE(UPPER(billing_postcode), ' ', '') = '${pc}')`;
-      })
-      .filter(Boolean)
-      .join(' OR ');
-
-    if (!whereConditions) {
-      return {
-        bestMatch: null,
-        candidates: [],
-        matchMethod: null,
-      };
-    }
-
     const { data: postcodeMatches, error } = await supabase.rpc('find_customers_by_postcode', {
-      where_clause: whereConditions
+      p_postcodes: targetPostcodes
     });
 
     if (error) {
