@@ -480,7 +480,7 @@ export function EmailDetailView({ emailId, onClose }: EmailDetailViewProps) {
                         <iframe
                           srcDoc={email.html_body}
                           sandbox="allow-same-origin"
-                          className="w-full min-h-[600px] max-h-[800px]"
+                          className="w-full min-h-[800px] max-h-[1200px]"
                           title="Email content"
                         />
                       ) : (
