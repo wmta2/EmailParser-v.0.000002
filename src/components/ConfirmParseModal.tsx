@@ -5,12 +5,21 @@ import type { EmailWithOrder } from '../lib/supabase';
 interface ConfirmParseModalProps {
   emails: EmailWithOrder[];
   templateDetections: Map<number, DetectionResult>;
+  selectedEmailIds?: Set<number>;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export function ConfirmParseModal({ emails, templateDetections, onConfirm, onCancel }: ConfirmParseModalProps) {
-  const unparsedEmails = emails.filter(e => !e.order);
+export function ConfirmParseModal({ emails, templateDetections, selectedEmailIds, onConfirm, onCancel }: ConfirmParseModalProps) {
+  const unparsedEmails = emails.filter(e => {
+    if (!e.order) {
+      if (selectedEmailIds && selectedEmailIds.size > 0) {
+        return selectedEmailIds.has(e.id);
+      }
+      return true;
+    }
+    return false;
+  });
 
   const templateGroups = new Map<string, { count: number; avgConfidence: number; lowConfidence: number }>();
 
@@ -51,7 +60,9 @@ export function ConfirmParseModal({ emails, templateDetections, onConfirm, onCan
 
         <div className="p-6 space-y-4">
           <div className="bg-slate-50 rounded-lg p-4">
-            <p className="text-sm text-slate-600 mb-2">Total unparsed emails:</p>
+            <p className="text-sm text-slate-600 mb-2">
+              {selectedEmailIds && selectedEmailIds.size > 0 ? 'Selected emails:' : 'Total unparsed emails:'}
+            </p>
             <p className="text-3xl font-bold text-slate-900">{unparsedEmails.length}</p>
           </div>
 

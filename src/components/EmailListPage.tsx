@@ -811,6 +811,7 @@ export function EmailListPage() {
         <ConfirmParseModal
           emails={emails}
           templateDetections={templateDetections}
+          selectedEmailIds={selectedEmailIds}
           onConfirm={confirmBulkParse}
           onCancel={() => setShowConfirmModal(false)}
         />
