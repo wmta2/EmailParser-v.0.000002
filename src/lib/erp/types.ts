@@ -1,4 +1,10 @@
 import type { Order, OrderItem, Customer } from '../supabase';
+import type {
+  OrderwiseProduct,
+  ProductFetchResult,
+  PriceListFetchResult,
+  ProductPriceFetchResult
+} from '../types/product';
 
 export interface ErpFieldDefinition {
   key: string;
@@ -177,4 +183,24 @@ export interface ErpAdapter {
     erpDestinationId?: string,
     erpConfigurationId?: string
   ): Promise<DeliveryAddressFetchResult>;
+
+  fetchProducts?(
+    credentials: Record<string, any>,
+    erpDestinationId?: string,
+    erpConfigurationId?: string,
+    lastModifiedSince?: string
+  ): Promise<ProductFetchResult>;
+
+  fetchPriceLists?(
+    credentials: Record<string, any>,
+    erpDestinationId?: string,
+    erpConfigurationId?: string
+  ): Promise<PriceListFetchResult>;
+
+  fetchProductPrices?(
+    credentials: Record<string, any>,
+    priceListId: number,
+    erpDestinationId?: string,
+    erpConfigurationId?: string
+  ): Promise<ProductPriceFetchResult>;
 }

@@ -14,6 +14,7 @@ import { MappingSection } from './orderwise/MappingSection';
 import { CustomerSyncSection } from './orderwise/CustomerSyncSection';
 import { ServicesSection } from './orderwise/ServicesSection';
 import { SyncHistorySection } from './orderwise/SyncHistorySection';
+import { ProductSyncSection } from './ProductSyncSection';
 import {
   Server,
   Save,
@@ -348,6 +349,8 @@ export function OrderwiseSettingsPage({ onBack, onNavigateToLogs }: Props) {
             fetchSyncLogs={fetchSyncLogs}
             fetchSyncItems={fetchSyncItems}
           />
+
+          {destId && <ProductSyncSection erpDestinationId={destId} />}
 
           <ServicesSection
             services={services}

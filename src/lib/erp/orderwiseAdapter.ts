@@ -11,7 +11,11 @@ import type {
   DeliveryAddressFetchResult,
   OrderwiseDeliveryAddress,
   ApiRequestMetadata,
+  ProductFetchResult,
+  PriceListFetchResult,
+  ProductPriceFetchResult,
 } from './types';
+import type { OrderwiseProduct, OrderwisePriceList, OrderwiseProductPrice } from '../types/product';
 import { mapOrderToOrderwise, type MappingConfig } from './orderwiseMapping';
 import { supabase } from '../supabase';
 
@@ -573,6 +577,260 @@ export class OrderwiseAdapter implements ErpAdapter {
         addresses: [],
         errorMessage: err instanceof Error ? err.message : 'Failed to fetch delivery addresses',
         apiMetadata,
+      };
+    }
+  }
+
+  async fetchProducts(
+    credentials: Record<string, any>,
+    erpDestinationId?: string,
+    erpConfigurationId?: string,
+    lastModifiedSince?: string
+  ): Promise<ProductFetchResult> {
+    try {
+      const { base_url, username, password, environment } = credentials;
+      if (!base_url || !username || !password) {
+        return {
+          success: false,
+          products: [],
+          errorMessage: 'Missing required credentials: base_url, username, and password are required',
+        };
+      }
+
+      const apiPath = environment === 'sandbox' ? '/OWAPISB' : '/OWAPI';
+      const url = `${base_url.replace(/\/$/, '')}${apiPath}/products`;
+
+      const startTime = Date.now();
+      const requestHeaders = {
+        'Authorization': 'Basic ' + btoa(`${username}:${password}`),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: requestHeaders,
+      });
+
+      const durationMs = Date.now() - startTime;
+      const responseBody = await response.json();
+
+      const apiMetadata: ApiRequestMetadata = {
+        httpMethod: 'GET',
+        endpoint: url,
+        requestHeaders: { ...requestHeaders, 'Authorization': '[REDACTED]' },
+        responseHeaders: Object.fromEntries(response.headers.entries()),
+        responseBody,
+        durationMs,
+      };
+
+      await this.logApiRequest(
+        erpDestinationId,
+        erpConfigurationId,
+        'api_request',
+        url,
+        'GET',
+        requestHeaders,
+        null,
+        response.status,
+        Object.fromEntries(response.headers.entries()),
+        responseBody,
+        response.ok,
+        response.ok ? null : `HTTP ${response.status}: ${response.statusText}`,
+        durationMs
+      );
+
+      if (!response.ok) {
+        throw new OrderwiseApiError(
+          `Failed to fetch products: HTTP ${response.status}`,
+          responseBody,
+          apiMetadata
+        );
+      }
+
+      const productArray = Array.isArray(responseBody) ? responseBody : [];
+      const products: OrderwiseProduct[] = productArray.map((item: any) => ({
+        id: item.id || item.Id || item.productId,
+        productCode: String(item.productCode || item.ProductCode || item.code || ''),
+        productName: String(item.productName || item.ProductName || item.name || ''),
+        description: item.description || item.Description || '',
+        supplierCode: item.supplierCode || item.SupplierCode || '',
+        manufacturerCode: item.manufacturerCode || item.ManufacturerCode || '',
+        barcode: item.barcode || item.Barcode || '',
+        weight: item.weight || item.Weight || 0,
+        category: item.category || item.Category || '',
+        brand: item.brand || item.Brand || '',
+        unitOfMeasure: item.unitOfMeasure || item.UnitOfMeasure || item.uom || '',
+        minimumOrderQuantity: item.minimumOrderQuantity || item.MinimumOrderQuantity || item.moq || 1,
+        costPrice: item.costPrice || item.CostPrice || 0,
+        sellPrice: item.sellPrice || item.SellPrice || item.price || 0,
+        stockLevel: item.stockLevel || item.StockLevel || item.stock || 0,
+        inStock: item.inStock !== false && item.InStock !== false,
+        isActive: item.isActive !== false && item.IsActive !== false,
+        metadata: item,
+      }));
+
+      return {
+        success: true,
+        products: products.filter(p => p.productCode),
+      };
+    } catch (err) {
+      return {
+        success: false,
+        products: [],
+        errorMessage: err instanceof Error ? err.message : 'Failed to fetch products',
+      };
+    }
+  }
+
+  async fetchPriceLists(
+    credentials: Record<string, any>,
+    erpDestinationId?: string,
+    erpConfigurationId?: string
+  ): Promise<PriceListFetchResult> {
+    try {
+      const { base_url, username, password, environment } = credentials;
+      if (!base_url || !username || !password) {
+        return {
+          success: false,
+          priceLists: [],
+          errorMessage: 'Missing required credentials',
+        };
+      }
+
+      const apiPath = environment === 'sandbox' ? '/OWAPISB' : '/OWAPI';
+      const url = `${base_url.replace(/\/$/, '')}${apiPath}/value-lists/56`;
+
+      const startTime = Date.now();
+      const requestHeaders = {
+        'Authorization': 'Basic ' + btoa(`${username}:${password}`),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: requestHeaders,
+      });
+
+      const durationMs = Date.now() - startTime;
+      const responseBody = await response.json();
+
+      await this.logApiRequest(
+        erpDestinationId,
+        erpConfigurationId,
+        'api_request',
+        url,
+        'GET',
+        requestHeaders,
+        null,
+        response.status,
+        Object.fromEntries(response.headers.entries()),
+        responseBody,
+        response.ok,
+        response.ok ? null : `HTTP ${response.status}`,
+        durationMs
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch price lists: HTTP ${response.status}`);
+      }
+
+      const priceListArray = Array.isArray(responseBody) ? responseBody : [];
+      const priceLists: OrderwisePriceList[] = priceListArray.map((item: any) => ({
+        id: item.id || item.Id,
+        name: String(item.name || item.Name || ''),
+        description: item.description || item.Description || '',
+        currency: item.currency || 'GBP',
+        isDefault: item.isDefault === true || item.default === true,
+      }));
+
+      return {
+        success: true,
+        priceLists: priceLists.filter(p => p.id),
+      };
+    } catch (err) {
+      return {
+        success: false,
+        priceLists: [],
+        errorMessage: err instanceof Error ? err.message : 'Failed to fetch price lists',
+      };
+    }
+  }
+
+  async fetchProductPrices(
+    credentials: Record<string, any>,
+    priceListId: number,
+    erpDestinationId?: string,
+    erpConfigurationId?: string
+  ): Promise<ProductPriceFetchResult> {
+    try {
+      const { base_url, username, password, environment } = credentials;
+      if (!base_url || !username || !password) {
+        return {
+          success: false,
+          prices: [],
+          errorMessage: 'Missing required credentials',
+        };
+      }
+
+      const apiPath = environment === 'sandbox' ? '/OWAPISB' : '/OWAPI';
+      const url = `${base_url.replace(/\/$/, '')}${apiPath}/product-prices?priceListId=${priceListId}`;
+
+      const startTime = Date.now();
+      const requestHeaders = {
+        'Authorization': 'Basic ' + btoa(`${username}:${password}`),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: requestHeaders,
+      });
+
+      const durationMs = Date.now() - startTime;
+      const responseBody = await response.json();
+
+      await this.logApiRequest(
+        erpDestinationId,
+        erpConfigurationId,
+        'api_request',
+        url,
+        'GET',
+        requestHeaders,
+        null,
+        response.status,
+        Object.fromEntries(response.headers.entries()),
+        responseBody,
+        response.ok,
+        response.ok ? null : `HTTP ${response.status}`,
+        durationMs
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch product prices: HTTP ${response.status}`);
+      }
+
+      const priceArray = Array.isArray(responseBody) ? responseBody : [];
+      const prices: OrderwiseProductPrice[] = priceArray.map((item: any) => ({
+        productId: item.productId || item.ProductId,
+        productCode: String(item.productCode || item.ProductCode || ''),
+        priceListId: item.priceListId || item.PriceListId || priceListId,
+        priceListName: String(item.priceListName || item.PriceListName || ''),
+        price: item.price || item.Price || 0,
+        currency: item.currency || item.Currency || 'GBP',
+      }));
+
+      return {
+        success: true,
+        prices: prices.filter(p => p.productCode),
+      };
+    } catch (err) {
+      return {
+        success: false,
+        prices: [],
+        errorMessage: err instanceof Error ? err.message : 'Failed to fetch product prices',
       };
     }
   }
