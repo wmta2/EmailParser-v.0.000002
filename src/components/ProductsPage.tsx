@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useProducts } from '../hooks/useProducts';
-import { Package, Search, RefreshCw, Edit, DollarSign, Box } from 'lucide-react';
+import { Package, Search, RefreshCw, CreditCard as Edit, DollarSign, Box } from 'lucide-react';
 import { Pagination } from './Pagination';
 
 const ITEMS_PER_PAGE = 20;
