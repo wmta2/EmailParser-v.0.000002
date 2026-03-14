@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { GmailConnection, GmailSyncSchedule, GmailSyncLog } from '../lib/supabase';
+import type { GmailConnection, GmailSyncSchedule, GmailSyncLog, GmailSettings, GmailScheduleWindow } from '../lib/supabase';
+
+export type { GmailSettings, GmailScheduleWindow };
 
 export function useGmailConnection() {
   const [connection, setConnection] = useState<GmailConnection | null>(null);
@@ -223,4 +225,94 @@ export function useGmailOAuth() {
   };
 
   return { connecting, error, getAuthUrl, handleCallback };
+}
+
+export function useGmailSettingsConfig() {
+  const [settings, setSettings] = useState<GmailSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const fetchSettings = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('gmail_settings')
+      .select('*')
+      .maybeSingle();
+    setSettings(data);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchSettings(); }, [fetchSettings]);
+
+  const saveSettings = async (updates: Partial<GmailSettings>) => {
+    setSaving(true);
+    let err = null;
+    if (settings) {
+      const { error } = await supabase
+        .from('gmail_settings')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', settings.id);
+      err = error;
+    } else {
+      const { error } = await supabase
+        .from('gmail_settings')
+        .insert(updates);
+      err = error;
+    }
+    if (!err) await fetchSettings();
+    setSaving(false);
+    return err;
+  };
+
+  return { settings, loading, saving, saveSettings, refetch: fetchSettings };
+}
+
+export function useGmailScheduleWindows() {
+  const [windows, setWindows] = useState<GmailScheduleWindow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const fetchWindows = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('gmail_schedule_windows')
+      .select('*')
+      .order('day_of_week', { ascending: true })
+      .order('sort_order', { ascending: true });
+    setWindows(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchWindows(); }, [fetchWindows]);
+
+  const saveWindows = async (
+    toUpsert: Omit<GmailScheduleWindow, 'created_at' | 'updated_at'>[],
+    toDelete: string[]
+  ) => {
+    setSaving(true);
+    let err = null;
+
+    if (toDelete.length > 0) {
+      const { error } = await supabase
+        .from('gmail_schedule_windows')
+        .delete()
+        .in('id', toDelete);
+      if (error) err = error;
+    }
+
+    if (!err && toUpsert.length > 0) {
+      const now = new Date().toISOString();
+      const rows = toUpsert.map(w => ({ ...w, updated_at: now }));
+      const { error } = await supabase
+        .from('gmail_schedule_windows')
+        .upsert(rows, { onConflict: 'id' });
+      if (error) err = error;
+    }
+
+    if (!err) await fetchWindows();
+    setSaving(false);
+    return err;
+  };
+
+  return { windows, loading, saving, saveWindows, refetch: fetchWindows };
 }

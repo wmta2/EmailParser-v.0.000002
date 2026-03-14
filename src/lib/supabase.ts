@@ -545,6 +545,28 @@ export interface GmailSyncSchedule {
   updated_at: string;
 }
 
+export interface GmailSettings {
+  id: string;
+  sync_enabled: boolean;
+  timezone: string;
+  sync_start_from: string | null;
+  max_emails_per_sync: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GmailScheduleWindow {
+  id: string;
+  enabled: boolean;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  interval_minutes: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface GmailSyncLog {
   id: string;
   sync_type: 'manual' | 'scheduled';

@@ -201,6 +201,14 @@ Deno.serve(async (req: Request) => {
       throw new Error("No connected Gmail account found");
     }
 
+    const { data: settings } = await supabase
+      .from("gmail_settings")
+      .select("max_emails_per_sync, sync_start_from")
+      .maybeSingle();
+
+    const maxEmailsPerSync = settings?.max_emails_per_sync ?? 10;
+    const syncStartFrom = settings?.sync_start_from ?? null;
+
     const accessToken = await getValidAccessToken(supabase, connection, clientId, clientSecret);
 
     const { data: rules } = await supabase
@@ -211,11 +219,17 @@ Deno.serve(async (req: Request) => {
 
     const activeRules: ImportRule[] = rules || [];
 
-    const afterDate = connection.last_synced_at
-      ? Math.floor(new Date(connection.last_synced_at).getTime() / 1000)
-      : Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+    let afterTimestamp: number;
 
-    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterDate}&maxResults=100`;
+    if (connection.last_synced_at) {
+      afterTimestamp = Math.floor(new Date(connection.last_synced_at).getTime() / 1000);
+    } else if (syncStartFrom) {
+      afterTimestamp = Math.floor(new Date(syncStartFrom).getTime() / 1000);
+    } else {
+      afterTimestamp = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+    }
+
+    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
     const listResponse = await fetch(listUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -259,6 +273,7 @@ Deno.serve(async (req: Request) => {
         const subject = getHeader(headers, "Subject");
         const from = getHeader(headers, "From");
         const dateStr = getHeader(headers, "Date");
+        const messageId = getHeader(headers, "Message-ID");
         const { text, html } = extractBody(detail.payload);
 
         let matchedRule: ImportRule | null = null;
@@ -289,7 +304,9 @@ Deno.serve(async (req: Request) => {
           content: text,
           html_body: html,
           gmail_message_id: msg.id,
+          message_id: messageId || null,
           date_received: dateReceived,
+          date_parsed: new Date().toISOString(),
           platform: "gmail",
         });
 

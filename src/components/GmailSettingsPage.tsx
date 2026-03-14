@@ -1,5 +1,5 @@
 import { ArrowLeft, Mail } from 'lucide-react';
-import { useGmailConnection, useGmailSchedule, useGmailSyncLogs, useGmailSync } from '../hooks/useGmailSettings';
+import { useGmailConnection, useGmailSyncLogs, useGmailSync } from '../hooks/useGmailSettings';
 import { useGmailRules } from '../hooks/useGmailRules';
 import { useTemplates } from '../hooks/useTemplates';
 import { GmailConnectionSection } from './gmail/GmailConnectionSection';
@@ -13,7 +13,6 @@ interface Props {
 
 export function GmailSettingsPage({ onBack }: Props) {
   const { connection, loading: connLoading, refetch: refetchConnection, disconnect } = useGmailConnection();
-  const { schedule, loading: schedLoading, saving: schedSaving, saveSchedule } = useGmailSchedule();
   const { logs, loading: logsLoading, refetch: refetchLogs } = useGmailSyncLogs(15);
   const { syncing, lastResult, syncNow } = useGmailSync();
   const { rules, loading: rulesLoading, saving: rulesSaving, createRule, updateRule, deleteRule, moveRule } = useGmailRules();
@@ -49,12 +48,7 @@ export function GmailSettingsPage({ onBack }: Props) {
             onDisconnect={handleDisconnect}
           />
 
-          <GmailScheduleSection
-            schedule={schedule}
-            loading={schedLoading}
-            saving={schedSaving}
-            onSave={saveSchedule}
-          />
+          <GmailScheduleSection />
         </div>
 
         <div className="space-y-6">
