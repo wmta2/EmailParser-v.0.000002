@@ -506,6 +506,60 @@ export interface OrderEmailsView {
   computed_status: ComputedStatus;
 }
 
+export interface GmailConnection {
+  id: string;
+  gmail_address: string;
+  access_token: string;
+  refresh_token: string;
+  token_expires_at: string;
+  connection_status: 'connected' | 'disconnected' | 'error';
+  last_synced_at: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GmailImportRule {
+  id: string;
+  name: string;
+  priority: number;
+  enabled: boolean;
+  match_field: 'sender' | 'subject' | 'body';
+  match_type: 'contains' | 'exact' | 'starts_with' | 'regex';
+  match_value: string;
+  action: 'import_only' | 'parse_with_template' | 'skip';
+  template_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GmailSyncSchedule {
+  id: string;
+  enabled: boolean;
+  peak_start_time: string;
+  peak_end_time: string;
+  peak_interval_minutes: number;
+  off_peak_interval_minutes: number;
+  timezone: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GmailSyncLog {
+  id: string;
+  sync_type: 'manual' | 'scheduled';
+  status: 'running' | 'success' | 'partial' | 'failed';
+  emails_found: number;
+  emails_imported: number;
+  emails_skipped: number;
+  emails_failed: number;
+  error_message: string | null;
+  error_details: Record<string, any> | null;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+}
+
 export function transformViewToEmailWithOrder(viewRow: OrderEmailsView): EmailWithOrder {
   const email: RawEmail = {
     id: viewRow.email_id,

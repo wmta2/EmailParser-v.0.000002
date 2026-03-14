@@ -15,6 +15,7 @@ import { ChannelCustomersPage } from './ChannelCustomersPage';
 import { OrderwiseSettingsPage } from './OrderwiseSettingsPage';
 import { OrderwiseApiLogsPage } from './OrderwiseApiLogsPage';
 import { ProfilePage } from './ProfilePage';
+import { GmailSettingsPage } from './GmailSettingsPage';
 
 export function AdminDashboard() {
   const { profile, signOut, isAdmin, isSuperAdmin } = useAuth();
@@ -76,6 +77,10 @@ export function AdminDashboard() {
       case 'orderwise-api-logs':
         return isSuperAdmin
           ? <OrderwiseApiLogsPage onBack={() => setActiveSection('orderwise-settings')} />
+          : noPermission;
+      case 'gmail-settings':
+        return isSuperAdmin
+          ? <GmailSettingsPage onBack={() => setActiveSection('channels')} />
           : noPermission;
       case 'sync-logs':
         return isSuperAdmin ? <SyncLogsPage /> : noPermission;

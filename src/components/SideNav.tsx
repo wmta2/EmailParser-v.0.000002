@@ -1,9 +1,4 @@
-import {
-  Users, Mail, Inbox, LogOut, Menu, X, FileCode,
-  ChevronDown, ChevronRight, User, ChevronLeft,
-  ShoppingCart, Activity, UserCircle, LayoutGrid,
-  Server, Upload, FileText,
-} from 'lucide-react';
+import { Users, Mail, Inbox, LogOut, Menu, X, FileCode, ChevronDown, ChevronRight, User, ChevronLeft, ShoppingCart, Activity, CircleUser as UserCircle, LayoutGrid, Server, Upload, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export type NavSection =
@@ -19,6 +14,7 @@ export type NavSection =
   | 'orderwise-customers'
   | 'orderwise-settings'
   | 'orderwise-api-logs'
+  | 'gmail-settings'
   | 'profile';
 
 interface SideNavProps {
@@ -80,6 +76,7 @@ export function SideNav({ activeSection, onSectionChange, onSignOut, userEmail, 
       items: [
         { id: 'channels', label: 'Channel Manager', icon: LayoutGrid, requiredRole: 'super_admin' },
         { id: 'woocommerce-settings', label: 'WooCommerce', icon: ShoppingCart, requiredRole: 'super_admin' },
+        { id: 'gmail-settings', label: 'Gmail', icon: Mail, requiredRole: 'super_admin' },
         { id: 'templates', label: 'Email Templates', icon: FileCode, requiredRole: 'super_admin' },
         { id: 'sync-logs', label: 'Sync Logs', icon: Activity, requiredRole: 'super_admin' },
       ],
