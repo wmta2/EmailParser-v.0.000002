@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { SideNav, type NavSection } from './SideNav';
 import { RegisteredUsersPage } from './RegisteredUsersPage';
@@ -23,6 +23,18 @@ export function AdminDashboard() {
   const [templateView, setTemplateView] = useState<'list' | 'form'>('list');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gmailParam = params.get('gmail');
+    if (gmailParam) {
+      setActiveSection('gmail-settings');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('gmail');
+      url.searchParams.delete('reason');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, []);
 
   const handleCreateNewTemplate = () => {
     setEditingTemplateId(null);

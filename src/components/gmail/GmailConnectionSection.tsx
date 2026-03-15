@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Mail, CheckCircle, XCircle, AlertTriangle, LogOut, ExternalLink, RefreshCw } from 'lucide-react';
+import { Mail, CheckCircle, XCircle, LogOut, ExternalLink, RefreshCw } from 'lucide-react';
 import type { GmailConnection } from '../../lib/supabase';
 import { useGmailOAuth } from '../../hooks/useGmailSettings';
 
@@ -10,33 +9,13 @@ interface Props {
   onDisconnect: () => void;
 }
 
-export function GmailConnectionSection({ connection, loading, onConnected, onDisconnect }: Props) {
-  const { connecting, error, getAuthUrl, handleCallback } = useGmailOAuth();
-  const [oauthCode, setOauthCode] = useState('');
-  const [showCodeInput, setShowCodeInput] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+export function GmailConnectionSection({ connection, loading, onConnected: _onConnected, onDisconnect }: Props) {
+  const { connecting, error, getAuthUrl } = useGmailOAuth();
 
   const handleConnect = async () => {
     const url = await getAuthUrl();
     if (url) {
-      window.open(url, '_blank', 'width=600,height=700');
-      setShowCodeInput(true);
-    }
-  };
-
-  const handleSubmitCode = async () => {
-    if (!oauthCode.trim()) return;
-    setSubmitting(true);
-    setSubmitError(null);
-    const success = await handleCallback(oauthCode.trim());
-    setSubmitting(false);
-    if (success) {
-      setShowCodeInput(false);
-      setOauthCode('');
-      onConnected();
-    } else {
-      setSubmitError('Failed to connect. Please check the code and try again.');
+      window.location.href = url;
     }
   };
 
@@ -99,60 +78,18 @@ export function GmailConnectionSection({ connection, loading, onConnected, onDis
             Connect a Gmail account to automatically import order emails. You will be redirected to Google to authorise access.
           </p>
 
-          {!showCodeInput ? (
-            <button
-              onClick={handleConnect}
-              disabled={connecting}
-              className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 text-sm font-medium"
-            >
-              {connecting ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <ExternalLink className="w-4 h-4" />
-              )}
-              {connecting ? 'Opening Google...' : 'Connect Gmail Account'}
-            </button>
-          ) : (
-            <div className="space-y-3">
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-blue-800">
-                    After authorising in the Google window, copy the authorisation code from the redirect URL and paste it below.
-                  </p>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Authorisation Code</label>
-                <input
-                  type="text"
-                  value={oauthCode}
-                  onChange={(e) => setOauthCode(e.target.value)}
-                  placeholder="Paste the code from Google here"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm font-mono"
-                />
-              </div>
-              {submitError && (
-                <p className="text-sm text-red-600">{submitError}</p>
-              )}
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSubmitCode}
-                  disabled={submitting || !oauthCode.trim()}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 text-sm font-medium"
-                >
-                  {submitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
-                  {submitting ? 'Connecting...' : 'Connect'}
-                </button>
-                <button
-                  onClick={() => { setShowCodeInput(false); setOauthCode(''); setSubmitError(null); }}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+          <button
+            onClick={handleConnect}
+            disabled={connecting}
+            className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 text-sm font-medium"
+          >
+            {connecting ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <ExternalLink className="w-4 h-4" />
+            )}
+            {connecting ? 'Redirecting to Google...' : 'Connect Gmail Account'}
+          </button>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
