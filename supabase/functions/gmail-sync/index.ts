@@ -215,6 +215,15 @@ Deno.serve(async (req: Request) => {
     debugLog.push(`Connection: last_synced_at=${connection.last_synced_at}`);
     debugLog.push(`reset_checkpoint=${resetCheckpoint}`);
 
+    if (resetCheckpoint) {
+      await supabase
+        .from("gmail_connection")
+        .update({ last_synced_at: null, updated_at: new Date().toISOString() })
+        .eq("id", connection.id);
+      connection.last_synced_at = null;
+      debugLog.push("Checkpoint cleared: last_synced_at has been reset to null");
+    }
+
     const accessToken = await getValidAccessToken(supabase, connection, clientId, clientSecret);
     debugLog.push("Access token obtained/refreshed successfully");
 
@@ -357,14 +366,22 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const checkpointUpdate: Record<string, string | null> = {
+      connection_status: "connected",
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (emailsImported > 0 || emailsSkipped > 0) {
+      checkpointUpdate.last_synced_at = new Date().toISOString();
+      debugLog.push(`Checkpoint advanced: last_synced_at updated (${emailsImported} imported, ${emailsSkipped} skipped)`);
+    } else {
+      debugLog.push("Checkpoint NOT advanced: no emails were processed, last_synced_at unchanged");
+    }
+
     await supabase
       .from("gmail_connection")
-      .update({
-        last_synced_at: new Date().toISOString(),
-        connection_status: "connected",
-        error_message: null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(checkpointUpdate)
       .eq("id", connection.id);
 
     const status = emailsFailed > 0 && emailsImported === 0
