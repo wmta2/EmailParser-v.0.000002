@@ -77,12 +77,19 @@ function getHeader(headers: Array<{ name: string; value: string }>, name: string
   return headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || "";
 }
 
+function extractEmailAddress(from: string): string {
+  const match = from.match(/<([^>]+)>/);
+  return match ? match[1] : from;
+}
+
 function matchesRule(rule: ImportRule, subject: string, from: string, bodyText: string): boolean {
-  const fieldValue = rule.match_field === "sender"
+  const rawFieldValue = rule.match_field === "sender"
     ? from
     : rule.match_field === "subject"
     ? subject
     : bodyText;
+
+  const fieldValue = rule.match_field === "sender" ? extractEmailAddress(rawFieldValue) : rawFieldValue;
 
   const value = fieldValue.toLowerCase();
   const match = rule.match_value.toLowerCase();
