@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, CheckCircle, AlertTriangle, XCircle, Clock, Settings2, ChevronDown, ChevronUp } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertTriangle, XCircle, Clock, Settings2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { GmailSyncLog, GmailSettings } from '../../lib/supabase';
 import { GmailStartModeModal, type StartMode } from './GmailStartModeModal';
 
@@ -25,6 +25,9 @@ interface Props {
   logs: GmailSyncLog[];
   logsLoading: boolean;
   onRefreshLogs: () => void;
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
 }
 
 const START_MODE_LABELS: Record<StartMode, string> = {
@@ -44,6 +47,9 @@ export function GmailSyncSection({
   logs,
   logsLoading,
   onRefreshLogs,
+  currentPage,
+  totalPages,
+  onPageChange,
 }: Props) {
   const [showDebug, setShowDebug] = useState(false);
   const [showStartModal, setShowStartModal] = useState(false);
@@ -51,12 +57,14 @@ export function GmailSyncSection({
   const handleSync = async () => {
     setShowDebug(false);
     await onSync();
+    onPageChange(1);
     onRefreshLogs();
   };
 
   const handleSyncWithReset = async () => {
     setShowDebug(false);
     await onSyncWithReset();
+    onPageChange(1);
     onRefreshLogs();
   };
 
@@ -206,6 +214,29 @@ export function GmailSyncSection({
             {logs.map(log => (
               <SyncLogRow key={log.id} log={log} />
             ))}
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="px-6 py-3 border-t border-slate-100 flex items-center justify-between">
+            <button
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={currentPage === 1 || logsLoading}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              Previous
+            </button>
+            <span className="text-xs text-slate-500">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={currentPage === totalPages || logsLoading}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </div>

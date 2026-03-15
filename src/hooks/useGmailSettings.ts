@@ -81,24 +81,28 @@ export function useGmailSchedule() {
   return { schedule, loading, saving, saveSchedule };
 }
 
-export function useGmailSyncLogs(limit = 10) {
+export function useGmailSyncLogs(limit = 5, page = 1) {
   const [logs, setLogs] = useState<GmailSyncLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    const { data, count } = await supabase
       .from('gmail_sync_log')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('started_at', { ascending: false })
-      .limit(limit);
+      .range(from, to);
     setLogs(data || []);
+    setTotalCount(count ?? 0);
     setLoading(false);
-  }, [limit]);
+  }, [limit, page]);
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
-  return { logs, loading, refetch: fetchLogs };
+  return { logs, loading, totalCount, refetch: fetchLogs };
 }
 
 export function useGmailSync() {

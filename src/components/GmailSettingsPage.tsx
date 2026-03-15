@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ArrowLeft, Mail } from 'lucide-react';
 import { useGmailConnection, useGmailSyncLogs, useGmailSync, useGmailSettingsConfig } from '../hooks/useGmailSettings';
 import { useGmailRules } from '../hooks/useGmailRules';
@@ -8,17 +9,26 @@ import { GmailSyncSection } from './gmail/GmailSyncSection';
 import { GmailRulesSection } from './gmail/GmailRulesSection';
 import type { StartMode } from './gmail/GmailStartModeModal';
 
+const PAGE_SIZE = 5;
+
 interface Props {
   onBack?: () => void;
 }
 
 export function GmailSettingsPage({ onBack }: Props) {
+  const [logsPage, setLogsPage] = useState(1);
   const { connection, loading: connLoading, refetch: refetchConnection, disconnect } = useGmailConnection();
-  const { logs, loading: logsLoading, refetch: refetchLogs } = useGmailSyncLogs(15);
+  const { logs, loading: logsLoading, totalCount, refetch: refetchLogs } = useGmailSyncLogs(PAGE_SIZE, logsPage);
   const { syncing, lastResult, syncNow, syncWithReset } = useGmailSync();
   const { settings, saveSettings } = useGmailSettingsConfig();
   const { rules, loading: rulesLoading, saving: rulesSaving, createRule, updateRule, deleteRule, moveRule } = useGmailRules();
   const { templates } = useTemplates();
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const handlePageChange = (page: number) => {
+    setLogsPage(page);
+  };
 
   const handleDisconnect = async () => {
     await disconnect();
@@ -29,6 +39,11 @@ export function GmailSettingsPage({ onBack }: Props) {
       start_mode: mode,
       sync_start_from: specificDate,
     });
+  };
+
+  const handleRefreshLogs = () => {
+    setLogsPage(1);
+    refetchLogs();
   };
 
   return (
@@ -70,7 +85,10 @@ export function GmailSettingsPage({ onBack }: Props) {
             onSaveStartMode={handleSaveStartMode}
             logs={logs}
             logsLoading={logsLoading}
-            onRefreshLogs={refetchLogs}
+            onRefreshLogs={handleRefreshLogs}
+            currentPage={logsPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
           />
         </div>
       </div>
