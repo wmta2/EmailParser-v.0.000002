@@ -240,7 +240,7 @@ Deno.serve(async (req: Request) => {
     debugLog.push(`Active import rules: ${activeRules.length} rule(s): ${activeRules.map(r => `"${r.name}" (${r.match_field} ${r.match_type} "${r.match_value}" -> ${r.action})`).join(", ")}`);
 
     function buildGmailFilterFromRules(rules: ImportRule[]): string {
-      const importRules = rules.filter(r => r.action === "import");
+      const importRules = rules.filter(r => r.action === "import_only");
       const skipRules = rules.filter(r => r.action === "skip");
 
       const includeParts: string[] = [];
@@ -297,15 +297,20 @@ Deno.serve(async (req: Request) => {
     let checkpointSource: string;
     let afterDate: string;
 
-    if (connection.next_page_token && !gmailRuleFilter) {
+    if (connection.next_page_token && !gmailRuleFilter && connection.last_synced_at && !resetCheckpoint) {
       listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?pageToken=${encodeURIComponent(connection.next_page_token)}&maxResults=${maxEmailsPerSync}`;
       checkpointSource = "next_page_token (continuing paginated scan)";
       afterDate = "(continuing from page token)";
       debugLog.push(`Resuming paginated scan using stored page token`);
       debugLog.push(`Gmail API URL: ${listUrl}`);
     } else {
-      if (connection.next_page_token && gmailRuleFilter) {
-        debugLog.push(`Stored page token discarded — starting fresh query with Gmail-side rule filter applied`);
+      if (connection.next_page_token) {
+        const reason = gmailRuleFilter
+          ? "starting fresh query with Gmail-side rule filter applied"
+          : resetCheckpoint
+          ? "checkpoint reset requested"
+          : "no prior sync checkpoint — starting fresh from configured start date";
+        debugLog.push(`Stored page token discarded — ${reason}`);
         await supabase
           .from("gmail_connection")
           .update({ next_page_token: null, updated_at: new Date().toISOString() })
