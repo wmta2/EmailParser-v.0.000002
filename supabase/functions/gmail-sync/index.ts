@@ -112,6 +112,46 @@ function matchesRule(rule: ImportRule, subject: string, from: string, bodyText: 
   }
 }
 
+async function getOrCreateSystemImportedLabel(accessToken: string): Promise<string | null> {
+  try {
+    const listRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!listRes.ok) return null;
+    const listData = await listRes.json();
+    const existing = (listData.labels || []).find((l: { name: string; id: string }) => l.name === "system-imported");
+    if (existing) return existing.id;
+
+    const createRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "system-imported", labelListVisibility: "labelShow", messageListVisibility: "show" }),
+    });
+    if (!createRes.ok) return null;
+    const created = await createRes.json();
+    return created.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function applyGmailActions(accessToken: string, messageId: string, labelId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ addLabelIds: [labelId], removeLabelIds: ["UNREAD"] }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      return { ok: false, error: data.error?.message || `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 async function getValidAccessToken(
   supabase: ReturnType<typeof createClient>,
   connection: { id: string; access_token: string; refresh_token: string; token_expires_at: string },
@@ -237,6 +277,8 @@ Deno.serve(async (req: Request) => {
 
     const accessToken = await getValidAccessToken(supabase, connection, clientId, clientSecret);
     debugLog.push("Access token obtained/refreshed successfully");
+
+    let systemImportedLabelId: string | null | undefined = undefined;
 
     const { data: rules } = await supabase
       .from("gmail_import_rules")
@@ -471,6 +513,21 @@ Deno.serve(async (req: Request) => {
 
         emailsImported++;
         debugLog.push(`  -> IMPORTED successfully (matched rule: "${matchedRule?.name ?? "none (no rules configured)"}")`);
+
+        if (matchedRule && (matchedRule.action === "import_only" || matchedRule.action === "parse_with_template")) {
+          if (systemImportedLabelId === undefined) {
+            systemImportedLabelId = await getOrCreateSystemImportedLabel(accessToken);
+            debugLog.push(`  -> system-imported label: ${systemImportedLabelId ? `resolved (id=${systemImportedLabelId})` : "could not resolve/create"}`);
+          }
+          if (systemImportedLabelId) {
+            const gmailActionResult = await applyGmailActions(accessToken, msg.id, systemImportedLabelId);
+            if (gmailActionResult.ok) {
+              debugLog.push(`  -> Gmail actions applied: labeled "system-imported", marked as read`);
+            } else {
+              debugLog.push(`  -> Gmail actions FAILED (non-fatal): ${gmailActionResult.error}`);
+            }
+          }
+        }
       } catch (msgErr) {
         emailsFailed++;
         const errMsg = msgErr instanceof Error ? msgErr.message : String(msgErr);
