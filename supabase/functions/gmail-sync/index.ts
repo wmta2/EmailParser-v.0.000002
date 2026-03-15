@@ -167,7 +167,7 @@ Deno.serve(async (req: Request) => {
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  let body: { sync_type?: string } = {};
+  let body: { sync_type?: string; reset_checkpoint?: boolean } = {};
   try {
     body = await req.json();
   } catch {
@@ -175,6 +175,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const syncType = body.sync_type || "manual";
+  const resetCheckpoint = body.reset_checkpoint === true;
 
   const { data: logData } = await supabase
     .from("gmail_sync_log")
@@ -189,6 +190,7 @@ Deno.serve(async (req: Request) => {
   let emailsSkipped = 0;
   let emailsFailed = 0;
   const errors: string[] = [];
+  const debugLog: string[] = [];
 
   try {
     const { data: connection } = await supabase
@@ -209,7 +211,12 @@ Deno.serve(async (req: Request) => {
     const maxEmailsPerSync = settings?.max_emails_per_sync ?? 10;
     const syncStartFrom = settings?.sync_start_from ?? null;
 
+    debugLog.push(`Settings: max_emails_per_sync=${maxEmailsPerSync}, sync_start_from=${syncStartFrom}`);
+    debugLog.push(`Connection: last_synced_at=${connection.last_synced_at}`);
+    debugLog.push(`reset_checkpoint=${resetCheckpoint}`);
+
     const accessToken = await getValidAccessToken(supabase, connection, clientId, clientSecret);
+    debugLog.push("Access token obtained/refreshed successfully");
 
     const { data: rules } = await supabase
       .from("gmail_import_rules")
@@ -218,18 +225,28 @@ Deno.serve(async (req: Request) => {
       .order("priority", { ascending: true });
 
     const activeRules: ImportRule[] = rules || [];
+    debugLog.push(`Active import rules: ${activeRules.length} rule(s): ${activeRules.map(r => `"${r.name}" (${r.match_field} ${r.match_type} "${r.match_value}" -> ${r.action})`).join(", ")}`);
 
     let afterTimestamp: number;
+    let checkpointSource: string;
 
-    if (connection.last_synced_at) {
+    if (!resetCheckpoint && connection.last_synced_at) {
       afterTimestamp = Math.floor(new Date(connection.last_synced_at).getTime() / 1000);
+      checkpointSource = `last_synced_at (${connection.last_synced_at})`;
     } else if (syncStartFrom) {
       afterTimestamp = Math.floor(new Date(syncStartFrom).getTime() / 1000);
+      checkpointSource = `sync_start_from (${syncStartFrom})`;
     } else {
       afterTimestamp = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+      checkpointSource = "default (last 24 hours)";
     }
 
+    const afterDate = new Date(afterTimestamp * 1000).toISOString();
+    debugLog.push(`Searching Gmail for emails AFTER: ${afterDate} (source: ${checkpointSource})`);
+
     const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+    debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
+
     const listResponse = await fetch(listUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -242,6 +259,11 @@ Deno.serve(async (req: Request) => {
 
     const messages: GmailMessage[] = listData.messages || [];
     emailsFound = messages.length;
+    debugLog.push(`Gmail API returned ${messages.length} message(s). resultSizeEstimate=${listData.resultSizeEstimate ?? "n/a"}`);
+
+    if (messages.length === 0) {
+      debugLog.push("No messages returned from Gmail. This could mean: (1) no new emails since the last sync checkpoint, (2) the 'after' date is too recent, or (3) the Gmail account has no matching emails in this period.");
+    }
 
     for (const msg of messages) {
       try {
@@ -253,6 +275,7 @@ Deno.serve(async (req: Request) => {
 
         if (existingEmail) {
           emailsSkipped++;
+          debugLog.push(`Message ${msg.id}: SKIPPED (already imported, raw_email.id=${existingEmail.id})`);
           continue;
         }
 
@@ -266,6 +289,7 @@ Deno.serve(async (req: Request) => {
         if (!detailResponse.ok) {
           emailsFailed++;
           errors.push(`Failed to fetch message ${msg.id}`);
+          debugLog.push(`Message ${msg.id}: FAILED to fetch detail`);
           continue;
         }
 
@@ -276,9 +300,13 @@ Deno.serve(async (req: Request) => {
         const messageId = getHeader(headers, "Message-ID");
         const { text, html } = extractBody(detail.payload);
 
+        debugLog.push(`Message ${msg.id}: from="${from}", subject="${subject}", date="${dateStr}", bodyLength=${text.length}chars`);
+
         let matchedRule: ImportRule | null = null;
         for (const rule of activeRules) {
-          if (matchesRule(rule, subject, from, text)) {
+          const matched = matchesRule(rule, subject, from, text);
+          debugLog.push(`  Rule "${rule.name}" (${rule.match_field} ${rule.match_type} "${rule.match_value}"): ${matched ? "MATCHED" : "no match"}`);
+          if (matched) {
             matchedRule = rule;
             break;
           }
@@ -286,11 +314,13 @@ Deno.serve(async (req: Request) => {
 
         if (matchedRule && matchedRule.action === "skip") {
           emailsSkipped++;
+          debugLog.push(`  -> SKIPPED by rule "${matchedRule.name}" (action=skip)`);
           continue;
         }
 
         if (activeRules.length > 0 && !matchedRule) {
           emailsSkipped++;
+          debugLog.push(`  -> SKIPPED: no rule matched (${activeRules.length} rules evaluated)`);
           continue;
         }
 
@@ -313,13 +343,17 @@ Deno.serve(async (req: Request) => {
         if (insertError) {
           emailsFailed++;
           errors.push(`Failed to import message ${msg.id}: ${insertError.message}`);
+          debugLog.push(`  -> FAILED to insert into raw_email: ${insertError.message} (code: ${insertError.code})`);
           continue;
         }
 
         emailsImported++;
+        debugLog.push(`  -> IMPORTED successfully (matched rule: "${matchedRule?.name ?? "none (no rules configured)"}")`);
       } catch (msgErr) {
         emailsFailed++;
-        errors.push(`Error processing message ${msg.id}: ${msgErr instanceof Error ? msgErr.message : String(msgErr)}`);
+        const errMsg = msgErr instanceof Error ? msgErr.message : String(msgErr);
+        errors.push(`Error processing message ${msg.id}: ${errMsg}`);
+        debugLog.push(`Message ${msg.id}: EXCEPTION - ${errMsg}`);
       }
     }
 
@@ -348,18 +382,28 @@ Deno.serve(async (req: Request) => {
           emails_imported: emailsImported,
           emails_skipped: emailsSkipped,
           emails_failed: emailsFailed,
-          error_details: errors.length > 0 ? { errors } : null,
+          error_details: { debug: debugLog, errors },
           completed_at: new Date().toISOString(),
         })
         .eq("id", logId);
     }
 
     return new Response(
-      JSON.stringify({ success: true, emails_found: emailsFound, emails_imported: emailsImported, emails_skipped: emailsSkipped, emails_failed: emailsFailed }),
+      JSON.stringify({
+        success: true,
+        emails_found: emailsFound,
+        emails_imported: emailsImported,
+        emails_skipped: emailsSkipped,
+        emails_failed: emailsFailed,
+        search_after: afterDate,
+        checkpoint_source: checkpointSource,
+        debug: debugLog,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    debugLog.push(`FATAL ERROR: ${errorMessage}`);
 
     if (logId) {
       await supabase
@@ -371,6 +415,7 @@ Deno.serve(async (req: Request) => {
           emails_skipped: emailsSkipped,
           emails_failed: emailsFailed,
           error_message: errorMessage,
+          error_details: { debug: debugLog, errors },
           completed_at: new Date().toISOString(),
         })
         .eq("id", logId);

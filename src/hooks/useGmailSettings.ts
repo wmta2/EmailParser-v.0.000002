@@ -109,10 +109,13 @@ export function useGmailSync() {
     emails_imported: number;
     emails_skipped: number;
     emails_failed: number;
+    search_after?: string;
+    checkpoint_source?: string;
+    debug?: string[];
     error?: string;
   } | null>(null);
 
-  const syncNow = async () => {
+  const runSync = async (resetCheckpoint = false) => {
     setSyncing(true);
     setLastResult(null);
     try {
@@ -127,7 +130,7 @@ export function useGmailSync() {
           'Authorization': `Bearer ${session?.access_token || anonKey}`,
           'Apikey': anonKey,
         },
-        body: JSON.stringify({ sync_type: 'manual' }),
+        body: JSON.stringify({ sync_type: 'manual', reset_checkpoint: resetCheckpoint }),
       });
 
       const data = await response.json();
@@ -141,6 +144,9 @@ export function useGmailSync() {
           emails_imported: data.emails_imported || 0,
           emails_skipped: data.emails_skipped || 0,
           emails_failed: data.emails_failed || 0,
+          search_after: data.search_after,
+          checkpoint_source: data.checkpoint_source,
+          debug: data.debug,
         });
       }
     } catch (err) {
@@ -150,7 +156,10 @@ export function useGmailSync() {
     }
   };
 
-  return { syncing, lastResult, syncNow };
+  const syncNow = () => runSync(false);
+  const syncWithReset = () => runSync(true);
+
+  return { syncing, lastResult, syncNow, syncWithReset };
 }
 
 export function useGmailOAuth() {

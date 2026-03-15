@@ -14,7 +14,7 @@ interface Props {
 export function GmailSettingsPage({ onBack }: Props) {
   const { connection, loading: connLoading, refetch: refetchConnection, disconnect } = useGmailConnection();
   const { logs, loading: logsLoading, refetch: refetchLogs } = useGmailSyncLogs(15);
-  const { syncing, lastResult, syncNow } = useGmailSync();
+  const { syncing, lastResult, syncNow, syncWithReset } = useGmailSync();
   const { rules, loading: rulesLoading, saving: rulesSaving, createRule, updateRule, deleteRule, moveRule } = useGmailRules();
   const { templates } = useTemplates();
 
@@ -56,6 +56,7 @@ export function GmailSettingsPage({ onBack }: Props) {
             syncing={syncing}
             lastResult={lastResult}
             onSync={syncNow}
+            onSyncWithReset={syncWithReset}
             logs={logs}
             logsLoading={logsLoading}
             onRefreshLogs={refetchLogs}
