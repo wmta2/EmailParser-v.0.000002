@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { RefreshCw, CheckCircle, AlertTriangle, XCircle, Clock, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
-import type { GmailSyncLog } from '../../lib/supabase';
+import { RefreshCw, CheckCircle, AlertTriangle, XCircle, Clock, Settings2, ChevronDown, ChevronUp } from 'lucide-react';
+import type { GmailSyncLog, GmailSettings } from '../../lib/supabase';
+import { GmailStartModeModal, type StartMode } from './GmailStartModeModal';
 
 interface SyncResult {
   success: boolean;
@@ -17,15 +18,35 @@ interface SyncResult {
 interface Props {
   syncing: boolean;
   lastResult: SyncResult | null;
+  settings: GmailSettings | null;
   onSync: () => Promise<void>;
   onSyncWithReset: () => Promise<void>;
+  onSaveStartMode: (mode: StartMode, specificDate: string | null) => Promise<void>;
   logs: GmailSyncLog[];
   logsLoading: boolean;
   onRefreshLogs: () => void;
 }
 
-export function GmailSyncSection({ syncing, lastResult, onSync, onSyncWithReset, logs, logsLoading, onRefreshLogs }: Props) {
+const START_MODE_LABELS: Record<StartMode, string> = {
+  manually: 'Choose manually',
+  specific_date: 'Since specific date',
+  all: 'All emails',
+  from_now: 'From now on',
+};
+
+export function GmailSyncSection({
+  syncing,
+  lastResult,
+  settings,
+  onSync,
+  onSyncWithReset,
+  onSaveStartMode,
+  logs,
+  logsLoading,
+  onRefreshLogs,
+}: Props) {
   const [showDebug, setShowDebug] = useState(false);
+  const [showStartModal, setShowStartModal] = useState(false);
 
   const handleSync = async () => {
     setShowDebug(false);
@@ -39,12 +60,25 @@ export function GmailSyncSection({ syncing, lastResult, onSync, onSyncWithReset,
     onRefreshLogs();
   };
 
+  const handleSaveStartMode = async (mode: StartMode, specificDate: string | null) => {
+    await onSaveStartMode(mode, specificDate);
+    setShowStartModal(false);
+  };
+
   const hasDebug = lastResult?.debug && lastResult.debug.length > 0;
+  const startMode = settings?.start_mode ?? null;
+  const startDate = settings?.sync_start_from ?? null;
+
+  const startModeDisplay = startMode ? START_MODE_LABELS[startMode] : null;
+  const startDateDisplay = startMode === 'specific_date' && startDate
+    ? new Date(startDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : null;
 
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <h3 className="font-semibold text-slate-900 mb-4">Sync Controls</h3>
+
         <div className="space-y-2">
           <button
             onClick={handleSync}
@@ -54,17 +88,41 @@ export function GmailSyncSection({ syncing, lastResult, onSync, onSyncWithReset,
             <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'Syncing...' : 'Sync Now'}
           </button>
+
           <button
-            onClick={handleSyncWithReset}
+            onClick={() => setShowStartModal(true)}
             disabled={syncing}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm font-medium"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm font-medium"
           >
-            <RotateCcw className="w-4 h-4" />
-            Sync from Start Date (reset checkpoint)
+            <Settings2 className="w-4 h-4" />
+            Choose where to start
           </button>
+
+          {(startModeDisplay || startDateDisplay) && (
+            <div className="flex items-center justify-center gap-1.5 pt-1">
+              <span className="text-xs text-slate-400">Starting point:</span>
+              <span className="text-xs font-medium text-slate-600">
+                {startModeDisplay}
+                {startDateDisplay && ` — ${startDateDisplay}`}
+              </span>
+            </div>
+          )}
         </div>
-        <p className="text-xs text-slate-500 mt-2">
-          "Sync Now" only fetches emails newer than the last sync. "Sync from Start Date" ignores the checkpoint and re-fetches from your configured start date.
+
+        {startMode && startMode !== 'manually' && (
+          <div className="mt-3">
+            <button
+              onClick={handleSyncWithReset}
+              disabled={syncing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 text-xs text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50"
+            >
+              Reset &amp; sync from start point
+            </button>
+          </div>
+        )}
+
+        <p className="text-xs text-slate-500 mt-3">
+          "Sync Now" fetches emails newer than the last sync. Use "Choose where to start" to control which emails get imported when resetting.
         </p>
 
         {lastResult && !syncing && (
@@ -143,6 +201,15 @@ export function GmailSyncSection({ syncing, lastResult, onSync, onSyncWithReset,
           </div>
         )}
       </div>
+
+      {showStartModal && (
+        <GmailStartModeModal
+          currentMode={settings?.start_mode ?? null}
+          currentStartDate={settings?.sync_start_from ?? null}
+          onSave={handleSaveStartMode}
+          onClose={() => setShowStartModal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -205,13 +205,14 @@ Deno.serve(async (req: Request) => {
 
     const { data: settings } = await supabase
       .from("gmail_settings")
-      .select("max_emails_per_sync, sync_start_from")
+      .select("max_emails_per_sync, sync_start_from, start_mode")
       .maybeSingle();
 
     const maxEmailsPerSync = settings?.max_emails_per_sync ?? 10;
     const syncStartFrom = settings?.sync_start_from ?? null;
+    const startMode = settings?.start_mode ?? null;
 
-    debugLog.push(`Settings: max_emails_per_sync=${maxEmailsPerSync}, sync_start_from=${syncStartFrom}`);
+    debugLog.push(`Settings: max_emails_per_sync=${maxEmailsPerSync}, sync_start_from=${syncStartFrom}, start_mode=${startMode}`);
     debugLog.push(`Connection: last_synced_at=${connection.last_synced_at}, next_page_token=${connection.next_page_token ?? "none"}`);
     debugLog.push(`reset_checkpoint=${resetCheckpoint}`);
 
@@ -248,23 +249,48 @@ Deno.serve(async (req: Request) => {
       debugLog.push(`Resuming paginated scan using stored page token`);
       debugLog.push(`Gmail API query: pageToken=<stored>, maxResults=${maxEmailsPerSync}`);
     } else {
-      let afterTimestamp: number;
-
       if (!resetCheckpoint && connection.last_synced_at) {
-        afterTimestamp = Math.floor(new Date(connection.last_synced_at).getTime() / 1000);
+        const afterTimestamp = Math.floor(new Date(connection.last_synced_at).getTime() / 1000);
         checkpointSource = `last_synced_at (${connection.last_synced_at})`;
-      } else if (syncStartFrom) {
-        afterTimestamp = Math.floor(new Date(syncStartFrom).getTime() / 1000);
-        checkpointSource = `sync_start_from (${syncStartFrom})`;
+        afterDate = new Date(afterTimestamp * 1000).toISOString();
+        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+        debugLog.push(`Searching Gmail for emails AFTER: ${afterDate} (source: ${checkpointSource})`);
+        debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
+      } else if (startMode === "all") {
+        checkpointSource = "start_mode=all (no date filter)";
+        afterDate = "(all emails)";
+        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxEmailsPerSync}`;
+        debugLog.push(`start_mode=all: fetching all emails with no date restriction`);
+        debugLog.push(`Gmail API query: no after filter, maxResults=${maxEmailsPerSync}`);
+      } else if (startMode === "from_now") {
+        const afterTimestamp = Math.floor(Date.now() / 1000);
+        checkpointSource = "start_mode=from_now";
+        afterDate = new Date(afterTimestamp * 1000).toISOString();
+        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+        debugLog.push(`start_mode=from_now: only fetching emails received after now`);
+        debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
+      } else if (startMode === "specific_date" && syncStartFrom) {
+        const afterTimestamp = Math.floor(new Date(syncStartFrom).getTime() / 1000);
+        checkpointSource = `start_mode=specific_date (${syncStartFrom})`;
+        afterDate = new Date(afterTimestamp * 1000).toISOString();
+        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+        debugLog.push(`start_mode=specific_date: fetching emails AFTER: ${afterDate}`);
+        debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
+      } else if (startMode === "manually" || (!startMode && !syncStartFrom)) {
+        const afterTimestamp = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+        checkpointSource = startMode === "manually" ? "start_mode=manually (last 24h fallback)" : "default (last 24 hours)";
+        afterDate = new Date(afterTimestamp * 1000).toISOString();
+        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+        debugLog.push(`Searching Gmail for emails AFTER: ${afterDate} (source: ${checkpointSource})`);
+        debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
       } else {
-        afterTimestamp = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
-        checkpointSource = "default (last 24 hours)";
+        const afterTimestamp = Math.floor(new Date(syncStartFrom!).getTime() / 1000);
+        checkpointSource = `sync_start_from fallback (${syncStartFrom})`;
+        afterDate = new Date(afterTimestamp * 1000).toISOString();
+        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+        debugLog.push(`Searching Gmail for emails AFTER: ${afterDate} (source: ${checkpointSource})`);
+        debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
       }
-
-      afterDate = new Date(afterTimestamp * 1000).toISOString();
-      listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
-      debugLog.push(`Searching Gmail for emails AFTER: ${afterDate} (source: ${checkpointSource})`);
-      debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
     }
 
     const listResponse = await fetch(listUrl, {

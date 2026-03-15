@@ -1,11 +1,12 @@
 import { ArrowLeft, Mail } from 'lucide-react';
-import { useGmailConnection, useGmailSyncLogs, useGmailSync } from '../hooks/useGmailSettings';
+import { useGmailConnection, useGmailSyncLogs, useGmailSync, useGmailSettingsConfig } from '../hooks/useGmailSettings';
 import { useGmailRules } from '../hooks/useGmailRules';
 import { useTemplates } from '../hooks/useTemplates';
 import { GmailConnectionSection } from './gmail/GmailConnectionSection';
 import { GmailScheduleSection } from './gmail/GmailScheduleSection';
 import { GmailSyncSection } from './gmail/GmailSyncSection';
 import { GmailRulesSection } from './gmail/GmailRulesSection';
+import type { StartMode } from './gmail/GmailStartModeModal';
 
 interface Props {
   onBack?: () => void;
@@ -15,11 +16,23 @@ export function GmailSettingsPage({ onBack }: Props) {
   const { connection, loading: connLoading, refetch: refetchConnection, disconnect } = useGmailConnection();
   const { logs, loading: logsLoading, refetch: refetchLogs } = useGmailSyncLogs(15);
   const { syncing, lastResult, syncNow, syncWithReset } = useGmailSync();
+  const { settings, saveSettings } = useGmailSettingsConfig();
   const { rules, loading: rulesLoading, saving: rulesSaving, createRule, updateRule, deleteRule, moveRule } = useGmailRules();
   const { templates } = useTemplates();
 
   const handleDisconnect = async () => {
     await disconnect();
+  };
+
+  const handleSaveStartMode = async (mode: StartMode, specificDate: string | null) => {
+    await saveSettings({
+      start_mode: mode,
+      sync_start_from: specificDate,
+    });
+    if (mode !== 'manually') {
+      await syncWithReset();
+      refetchLogs();
+    }
   };
 
   return (
@@ -55,8 +68,10 @@ export function GmailSettingsPage({ onBack }: Props) {
           <GmailSyncSection
             syncing={syncing}
             lastResult={lastResult}
+            settings={settings}
             onSync={syncNow}
             onSyncWithReset={syncWithReset}
+            onSaveStartMode={handleSaveStartMode}
             logs={logs}
             logsLoading={logsLoading}
             onRefreshLogs={refetchLogs}

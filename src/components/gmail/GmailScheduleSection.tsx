@@ -34,7 +34,6 @@ export function GmailScheduleSection() {
 
   const [syncEnabled, setSyncEnabled] = useState(false);
   const [timezone, setTimezone] = useState('UTC');
-  const [syncStartFrom, setSyncStartFrom] = useState('');
   const [maxEmailsPerSync, setMaxEmailsPerSync] = useState(10);
   const [draftWindows, setDraftWindows] = useState<DraftWindow[]>([]);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
@@ -47,7 +46,6 @@ export function GmailScheduleSection() {
     if (settings) {
       setSyncEnabled(settings.sync_enabled);
       setTimezone(settings.timezone);
-      setSyncStartFrom(settings.sync_start_from ? settings.sync_start_from.slice(0, 16) : '');
       setMaxEmailsPerSync(settings.max_emails_per_sync);
     }
   }, [settings]);
@@ -87,7 +85,6 @@ export function GmailScheduleSection() {
     const settingsErr = await saveSettings({
       sync_enabled: syncEnabled,
       timezone,
-      sync_start_from: syncStartFrom ? new Date(syncStartFrom).toISOString() : null,
       max_emails_per_sync: maxEmailsPerSync,
     });
 
@@ -152,19 +149,6 @@ export function GmailScheduleSection() {
                 <option key={tz} value={tz}>{tz}</option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Start importing from</label>
-            <p className="text-xs text-slate-500 mb-1.5">
-              Only applies to the very first sync. Once emails have been imported, this is ignored.
-            </p>
-            <input
-              type="datetime-local"
-              value={syncStartFrom}
-              onChange={(e) => setSyncStartFrom(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm"
-            />
           </div>
 
           <div>

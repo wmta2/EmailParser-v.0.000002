@@ -550,6 +550,7 @@ export interface GmailSettings {
   sync_enabled: boolean;
   timezone: string;
   sync_start_from: string | null;
+  start_mode: 'from_now' | 'specific_date' | 'all' | 'manually' | null;
   max_emails_per_sync: number;
   created_at: string;
   updated_at: string;
