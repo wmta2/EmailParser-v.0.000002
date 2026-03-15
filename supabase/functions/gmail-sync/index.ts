@@ -241,7 +241,7 @@ Deno.serve(async (req: Request) => {
     debugLog.push(`Active import rules: ${activeRules.length} rule(s): ${activeRules.map(r => `"${r.name}" (${r.match_field} ${r.match_type} "${r.match_value}" -> ${r.action})`).join(", ")}`);
 
     function buildGmailFilterFromRules(rules: ImportRule[]): string {
-      const importRules = rules.filter(r => r.action === "import_only");
+      const importRules = rules.filter(r => r.action === "import_only" || r.action === "parse_with_template");
       const skipRules = rules.filter(r => r.action === "skip");
 
       const includeParts: string[] = [];
@@ -302,10 +302,12 @@ Deno.serve(async (req: Request) => {
     const canResumePageToken = connection.next_page_token && isScanInProgress && !resetCheckpoint;
 
     if (canResumePageToken) {
-      listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?pageToken=${encodeURIComponent(connection.next_page_token!)}&maxResults=${maxEmailsPerSync}`;
+      debugLog.push(`Resuming paginated scan using stored page token (scan_started_at=${connection.scan_started_at})`);
+      const params = new URLSearchParams({ pageToken: connection.next_page_token!, maxResults: String(maxEmailsPerSync) });
+      if (gmailRuleFilter) params.set("q", gmailRuleFilter);
+      listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params.toString()}`;
       checkpointSource = `next_page_token (resuming scan started at ${connection.scan_started_at})`;
       afterDate = "(continuing from page token)";
-      debugLog.push(`Resuming paginated scan using stored page token (scan_started_at=${connection.scan_started_at})`);
       debugLog.push(`Gmail API URL: ${listUrl}`);
     } else {
       if (connection.next_page_token) {
