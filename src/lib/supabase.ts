@@ -512,7 +512,7 @@ export interface GmailConnection {
   access_token: string;
   refresh_token: string;
   token_expires_at: string;
-  connection_status: 'connected' | 'disconnected' | 'error';
+  connection_status: 'connected' | 'disconnected' | 'error' | 'needs_reauth';
   last_synced_at: string | null;
   error_message: string | null;
   created_at: string;

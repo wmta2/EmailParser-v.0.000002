@@ -1,4 +1,4 @@
-import { Mail, CheckCircle, XCircle, LogOut, ExternalLink, RefreshCw } from 'lucide-react';
+import { Mail, CheckCircle, XCircle, LogOut, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
 import type { GmailConnection } from '../../lib/supabase';
 import { useGmailOAuth } from '../../hooks/useGmailSettings';
 
@@ -32,6 +32,7 @@ export function GmailConnectionSection({ connection, loading, onConnected: _onCo
   }
 
   const isConnected = connection?.connection_status === 'connected';
+  const isNeedsReauth = connection?.connection_status === 'needs_reauth';
   const isError = connection?.connection_status === 'error';
 
   return (
@@ -62,6 +63,43 @@ export function GmailConnectionSection({ connection, loading, onConnected: _onCo
         </div>
       )}
 
+      {isNeedsReauth && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-lg border border-amber-200">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-800">Re-authorization Required</p>
+              <p className="text-sm text-amber-700 truncate">{connection.gmail_address}</p>
+              <p className="text-xs text-amber-600 mt-1">
+                Gmail permissions have been upgraded. Please re-authorize to allow labelling and marking emails as read.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleConnect}
+              disabled={connecting}
+              className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 text-sm font-medium"
+            >
+              {connecting ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <ExternalLink className="w-4 h-4" />
+              )}
+              {connecting ? 'Redirecting to Google...' : 'Re-authorize with Google'}
+            </button>
+            <button
+              onClick={onDisconnect}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Disconnect
+            </button>
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+      )}
+
       {isError && (
         <div className="mb-4 flex items-start gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
           <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -72,7 +110,7 @@ export function GmailConnectionSection({ connection, loading, onConnected: _onCo
         </div>
       )}
 
-      {!isConnected && (
+      {!isConnected && !isNeedsReauth && (
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
             Connect a Gmail account to automatically import order emails. You will be redirected to Google to authorise access.
