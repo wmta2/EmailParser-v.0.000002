@@ -529,6 +529,7 @@ export interface GmailImportRule {
   match_value: string;
   action: 'import_only' | 'parse_with_template' | 'skip';
   template_id: string | null;
+  platform: string | null;
   created_at: string;
   updated_at: string;
 }

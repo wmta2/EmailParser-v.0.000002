@@ -36,6 +36,7 @@ interface ImportRule {
   match_value: string;
   action: string;
   template_id: string | null;
+  platform: string | null;
 }
 
 function decodeBase64(data: string): string {
@@ -384,7 +385,7 @@ Deno.serve(async (req: Request) => {
           message_id: messageId || null,
           date_received: dateReceived,
           date_parsed: new Date().toISOString(),
-          platform: "gmail",
+          platform: matchedRule?.platform ?? "gmail",
         });
 
         if (insertError) {

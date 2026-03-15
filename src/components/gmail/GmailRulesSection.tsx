@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Filter, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Filter, AlertTriangle, Tag } from 'lucide-react';
 import type { GmailImportRule } from '../../lib/supabase';
 import type { EmailTemplatePattern } from '../../lib/templateEngine';
 
@@ -10,6 +10,7 @@ interface RuleFormData {
   match_value: string;
   action: GmailImportRule['action'];
   template_id: string | null;
+  platform: string;
   enabled: boolean;
   priority: number;
 }
@@ -21,6 +22,7 @@ const EMPTY_FORM: RuleFormData = {
   match_value: '',
   action: 'import_only',
   template_id: null,
+  platform: '',
   enabled: true,
   priority: 0,
 };
@@ -36,6 +38,18 @@ const ACTION_LABELS: Record<string, string> = {
   parse_with_template: 'Parse with Template',
   skip: 'Skip',
 };
+
+const PLATFORM_COLORS: Record<string, string> = {
+  ProcureWizard: 'bg-orange-100 text-orange-700',
+  Fourth: 'bg-cyan-100 text-cyan-700',
+  ZonalConnect: 'bg-teal-100 text-teal-700',
+  Acquire: 'bg-rose-100 text-rose-700',
+  WooCommerce: 'bg-purple-100 text-purple-700',
+};
+
+function getPlatformStyle(platform: string): string {
+  return PLATFORM_COLORS[platform] ?? 'bg-slate-100 text-slate-600';
+}
 
 interface Props {
   rules: GmailImportRule[];
@@ -71,6 +85,7 @@ export function GmailRulesSection({ rules, loading, saving, templates, onCreate,
       match_value: rule.match_value,
       action: rule.action,
       template_id: rule.template_id,
+      platform: rule.platform ?? '',
       enabled: rule.enabled,
       priority: rule.priority,
     });
@@ -84,11 +99,15 @@ export function GmailRulesSection({ rules, loading, saving, templates, onCreate,
     if (form.action === 'parse_with_template' && !form.template_id) { setFormError('Select a template for this action'); return; }
 
     setFormError(null);
+    const payload = {
+      ...form,
+      platform: form.platform.trim() || null,
+    };
     let err;
     if (editingId) {
-      err = await onUpdate(editingId, form);
+      err = await onUpdate(editingId, payload);
     } else {
-      err = await onCreate(form);
+      err = await onCreate(payload);
     }
 
     if (!err) {
@@ -139,15 +158,30 @@ export function GmailRulesSection({ rules, loading, saving, templates, onCreate,
         <div className="p-6 border-b border-slate-200 bg-slate-50">
           <h4 className="font-medium text-slate-900 mb-4">{editingId ? 'Edit Rule' : 'New Rule'}</h4>
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Rule Name</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Orders from Acme Corp"
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Rule Name</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Orders from Acme Corp"
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Platform Tag
+                  <span className="ml-1.5 text-slate-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.platform}
+                  onChange={(e) => setForm(f => ({ ...f, platform: e.target.value }))}
+                  placeholder="e.g. ProcureWizard, Fourth, ZonalConnect"
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent text-sm"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
@@ -214,6 +248,15 @@ export function GmailRulesSection({ rules, loading, saving, templates, onCreate,
                     <option key={t.id} value={t.id}>{t.template_name}</option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {form.platform.trim() && (
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                <Tag className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <p className="text-xs text-blue-700">
+                  Matched emails will have their platform set to <strong>{form.platform.trim()}</strong>
+                </p>
               </div>
             )}
 
@@ -287,10 +330,16 @@ export function GmailRulesSection({ rules, loading, saving, templates, onCreate,
               </div>
 
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="font-medium text-slate-900 text-sm truncate">{rule.name}</span>
                   {!rule.enabled && (
                     <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">disabled</span>
+                  )}
+                  {rule.platform && (
+                    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium ${getPlatformStyle(rule.platform)}`}>
+                      <Tag className="w-3 h-3" />
+                      {rule.platform}
+                    </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
