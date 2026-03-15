@@ -116,13 +116,13 @@ export function GmailSyncSection({
               disabled={syncing}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 text-xs text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50"
             >
-              Reset &amp; sync from start point
+              Sync from chosen start point
             </button>
           </div>
         )}
 
         <p className="text-xs text-slate-500 mt-3">
-          "Sync Now" fetches emails newer than the last sync. Use "Choose where to start" to control which emails get imported when resetting.
+          "Sync Now" fetches emails newer than the last sync. Use "Choose where to start" to set a starting point, then click "Sync from chosen start point" to import from there.
         </p>
 
         {lastResult && !syncing && (

@@ -29,10 +29,6 @@ export function GmailSettingsPage({ onBack }: Props) {
       start_mode: mode,
       sync_start_from: specificDate,
     });
-    if (mode !== 'manually') {
-      await syncWithReset();
-      refetchLogs();
-    }
   };
 
   return (
