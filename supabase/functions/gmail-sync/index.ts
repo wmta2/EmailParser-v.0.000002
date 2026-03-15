@@ -195,7 +195,7 @@ Deno.serve(async (req: Request) => {
   try {
     const { data: connection } = await supabase
       .from("gmail_connection")
-      .select("id, access_token, refresh_token, token_expires_at, last_synced_at")
+      .select("id, access_token, refresh_token, token_expires_at, last_synced_at, next_page_token")
       .eq("connection_status", "connected")
       .maybeSingle();
 
@@ -212,16 +212,17 @@ Deno.serve(async (req: Request) => {
     const syncStartFrom = settings?.sync_start_from ?? null;
 
     debugLog.push(`Settings: max_emails_per_sync=${maxEmailsPerSync}, sync_start_from=${syncStartFrom}`);
-    debugLog.push(`Connection: last_synced_at=${connection.last_synced_at}`);
+    debugLog.push(`Connection: last_synced_at=${connection.last_synced_at}, next_page_token=${connection.next_page_token ?? "none"}`);
     debugLog.push(`reset_checkpoint=${resetCheckpoint}`);
 
     if (resetCheckpoint) {
       await supabase
         .from("gmail_connection")
-        .update({ last_synced_at: null, updated_at: new Date().toISOString() })
+        .update({ last_synced_at: null, next_page_token: null, updated_at: new Date().toISOString() })
         .eq("id", connection.id);
       connection.last_synced_at = null;
-      debugLog.push("Checkpoint cleared: last_synced_at has been reset to null");
+      connection.next_page_token = null;
+      debugLog.push("Checkpoint cleared: last_synced_at and next_page_token have been reset to null");
     }
 
     const accessToken = await getValidAccessToken(supabase, connection, clientId, clientSecret);
@@ -236,25 +237,35 @@ Deno.serve(async (req: Request) => {
     const activeRules: ImportRule[] = rules || [];
     debugLog.push(`Active import rules: ${activeRules.length} rule(s): ${activeRules.map(r => `"${r.name}" (${r.match_field} ${r.match_type} "${r.match_value}" -> ${r.action})`).join(", ")}`);
 
-    let afterTimestamp: number;
+    let listUrl: string;
     let checkpointSource: string;
+    let afterDate: string;
 
-    if (!resetCheckpoint && connection.last_synced_at) {
-      afterTimestamp = Math.floor(new Date(connection.last_synced_at).getTime() / 1000);
-      checkpointSource = `last_synced_at (${connection.last_synced_at})`;
-    } else if (syncStartFrom) {
-      afterTimestamp = Math.floor(new Date(syncStartFrom).getTime() / 1000);
-      checkpointSource = `sync_start_from (${syncStartFrom})`;
+    if (connection.next_page_token) {
+      listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?pageToken=${encodeURIComponent(connection.next_page_token)}&maxResults=${maxEmailsPerSync}`;
+      checkpointSource = "next_page_token (continuing paginated scan)";
+      afterDate = "(continuing from page token)";
+      debugLog.push(`Resuming paginated scan using stored page token`);
+      debugLog.push(`Gmail API query: pageToken=<stored>, maxResults=${maxEmailsPerSync}`);
     } else {
-      afterTimestamp = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
-      checkpointSource = "default (last 24 hours)";
+      let afterTimestamp: number;
+
+      if (!resetCheckpoint && connection.last_synced_at) {
+        afterTimestamp = Math.floor(new Date(connection.last_synced_at).getTime() / 1000);
+        checkpointSource = `last_synced_at (${connection.last_synced_at})`;
+      } else if (syncStartFrom) {
+        afterTimestamp = Math.floor(new Date(syncStartFrom).getTime() / 1000);
+        checkpointSource = `sync_start_from (${syncStartFrom})`;
+      } else {
+        afterTimestamp = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+        checkpointSource = "default (last 24 hours)";
+      }
+
+      afterDate = new Date(afterTimestamp * 1000).toISOString();
+      listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+      debugLog.push(`Searching Gmail for emails AFTER: ${afterDate} (source: ${checkpointSource})`);
+      debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
     }
-
-    const afterDate = new Date(afterTimestamp * 1000).toISOString();
-    debugLog.push(`Searching Gmail for emails AFTER: ${afterDate} (source: ${checkpointSource})`);
-
-    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
-    debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
 
     const listResponse = await fetch(listUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -267,8 +278,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const messages: GmailMessage[] = listData.messages || [];
+    const nextPageToken: string | null = listData.nextPageToken ?? null;
     emailsFound = messages.length;
-    debugLog.push(`Gmail API returned ${messages.length} message(s). resultSizeEstimate=${listData.resultSizeEstimate ?? "n/a"}`);
+    debugLog.push(`Gmail API returned ${messages.length} message(s). resultSizeEstimate=${listData.resultSizeEstimate ?? "n/a"}. nextPageToken=${nextPageToken ? "present" : "none (last page)"}`);
 
     if (messages.length === 0) {
       debugLog.push("No messages returned from Gmail. This could mean: (1) no new emails since the last sync checkpoint, (2) the 'after' date is too recent, or (3) the Gmail account has no matching emails in this period.");
@@ -372,11 +384,13 @@ Deno.serve(async (req: Request) => {
       updated_at: new Date().toISOString(),
     };
 
-    if (emailsImported > 0 || emailsSkipped > 0) {
-      checkpointUpdate.last_synced_at = new Date().toISOString();
-      debugLog.push(`Checkpoint advanced: last_synced_at updated (${emailsImported} imported, ${emailsSkipped} skipped)`);
+    if (nextPageToken) {
+      checkpointUpdate.next_page_token = nextPageToken;
+      debugLog.push(`More pages available: next_page_token saved. Run sync again to continue scanning.`);
     } else {
-      debugLog.push("Checkpoint NOT advanced: no emails were processed, last_synced_at unchanged");
+      checkpointUpdate.next_page_token = null;
+      checkpointUpdate.last_synced_at = new Date().toISOString();
+      debugLog.push(`All pages scanned: next_page_token cleared, last_synced_at updated to now.`);
     }
 
     await supabase
@@ -414,6 +428,7 @@ Deno.serve(async (req: Request) => {
         emails_failed: emailsFailed,
         search_after: afterDate,
         checkpoint_source: checkpointSource,
+        has_more_pages: nextPageToken !== null,
         debug: debugLog,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
