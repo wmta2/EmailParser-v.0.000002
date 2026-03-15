@@ -196,7 +196,7 @@ Deno.serve(async (req: Request) => {
   try {
     const { data: connection } = await supabase
       .from("gmail_connection")
-      .select("id, access_token, refresh_token, token_expires_at, last_synced_at, next_page_token")
+      .select("id, access_token, refresh_token, token_expires_at, last_synced_at, next_page_token, scan_started_at")
       .eq("connection_status", "connected")
       .maybeSingle();
 
@@ -214,17 +214,18 @@ Deno.serve(async (req: Request) => {
     const startMode = settings?.start_mode ?? null;
 
     debugLog.push(`Settings: max_emails_per_sync=${maxEmailsPerSync}, sync_start_from=${syncStartFrom}, start_mode=${startMode}`);
-    debugLog.push(`Connection: last_synced_at=${connection.last_synced_at}, next_page_token=${connection.next_page_token ?? "none"}`);
+    debugLog.push(`Connection: last_synced_at=${connection.last_synced_at}, next_page_token=${connection.next_page_token ?? "none"}, scan_started_at=${connection.scan_started_at ?? "none"}`);
     debugLog.push(`reset_checkpoint=${resetCheckpoint}`);
 
     if (resetCheckpoint) {
       await supabase
         .from("gmail_connection")
-        .update({ last_synced_at: null, next_page_token: null, updated_at: new Date().toISOString() })
+        .update({ last_synced_at: null, next_page_token: null, scan_started_at: null, updated_at: new Date().toISOString() })
         .eq("id", connection.id);
       connection.last_synced_at = null;
       connection.next_page_token = null;
-      debugLog.push("Checkpoint cleared: last_synced_at and next_page_token have been reset to null");
+      connection.scan_started_at = null;
+      debugLog.push("Checkpoint cleared: last_synced_at, next_page_token, and scan_started_at have been reset to null");
     }
 
     const accessToken = await getValidAccessToken(supabase, connection, clientId, clientSecret);
@@ -297,25 +298,27 @@ Deno.serve(async (req: Request) => {
     let checkpointSource: string;
     let afterDate: string;
 
-    if (connection.next_page_token && !gmailRuleFilter && connection.last_synced_at && !resetCheckpoint) {
-      listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?pageToken=${encodeURIComponent(connection.next_page_token)}&maxResults=${maxEmailsPerSync}`;
-      checkpointSource = "next_page_token (continuing paginated scan)";
+    const isScanInProgress = !!connection.scan_started_at;
+    const canResumePageToken = connection.next_page_token && isScanInProgress && !resetCheckpoint;
+
+    if (canResumePageToken) {
+      listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?pageToken=${encodeURIComponent(connection.next_page_token!)}&maxResults=${maxEmailsPerSync}`;
+      checkpointSource = `next_page_token (resuming scan started at ${connection.scan_started_at})`;
       afterDate = "(continuing from page token)";
-      debugLog.push(`Resuming paginated scan using stored page token`);
+      debugLog.push(`Resuming paginated scan using stored page token (scan_started_at=${connection.scan_started_at})`);
       debugLog.push(`Gmail API URL: ${listUrl}`);
     } else {
       if (connection.next_page_token) {
-        const reason = gmailRuleFilter
-          ? "starting fresh query with Gmail-side rule filter applied"
-          : resetCheckpoint
+        const reason = resetCheckpoint
           ? "checkpoint reset requested"
-          : "no prior sync checkpoint — starting fresh from configured start date";
+          : "starting fresh scan";
         debugLog.push(`Stored page token discarded — ${reason}`);
         await supabase
           .from("gmail_connection")
-          .update({ next_page_token: null, updated_at: new Date().toISOString() })
+          .update({ next_page_token: null, scan_started_at: null, updated_at: new Date().toISOString() })
           .eq("id", connection.id);
         connection.next_page_token = null;
+        connection.scan_started_at = null;
       }
 
       if (!resetCheckpoint && connection.last_synced_at) {
@@ -467,19 +470,26 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const now = new Date().toISOString();
     const checkpointUpdate: Record<string, string | null> = {
       connection_status: "connected",
       error_message: null,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     };
 
     if (nextPageToken) {
       checkpointUpdate.next_page_token = nextPageToken;
-      debugLog.push(`More pages available: next_page_token saved. Run sync again to continue scanning.`);
+      if (!connection.scan_started_at) {
+        checkpointUpdate.scan_started_at = now;
+        debugLog.push(`Fresh scan started: scan_started_at recorded. next_page_token saved. Run sync again to continue.`);
+      } else {
+        debugLog.push(`More pages available: next_page_token saved. Run sync again to continue scanning.`);
+      }
     } else {
       checkpointUpdate.next_page_token = null;
-      checkpointUpdate.last_synced_at = new Date().toISOString();
-      debugLog.push(`All pages scanned: next_page_token cleared, last_synced_at updated to now.`);
+      checkpointUpdate.scan_started_at = null;
+      checkpointUpdate.last_synced_at = now;
+      debugLog.push(`All pages scanned: scan_started_at cleared, next_page_token cleared, last_synced_at updated to now.`);
     }
 
     await supabase
