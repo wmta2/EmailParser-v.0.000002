@@ -239,58 +239,115 @@ Deno.serve(async (req: Request) => {
     const activeRules: ImportRule[] = rules || [];
     debugLog.push(`Active import rules: ${activeRules.length} rule(s): ${activeRules.map(r => `"${r.name}" (${r.match_field} ${r.match_type} "${r.match_value}" -> ${r.action})`).join(", ")}`);
 
+    function buildGmailFilterFromRules(rules: ImportRule[]): string {
+      const importRules = rules.filter(r => r.action === "import");
+      const skipRules = rules.filter(r => r.action === "skip");
+
+      const includeParts: string[] = [];
+      const excludeParts: string[] = [];
+
+      for (const rule of importRules) {
+        if (rule.match_type === "regex" || rule.match_field === "body") continue;
+        if (rule.match_field === "sender") {
+          includeParts.push(`from:${rule.match_value}`);
+        } else if (rule.match_field === "subject") {
+          includeParts.push(`subject:${rule.match_value}`);
+        }
+      }
+
+      for (const rule of skipRules) {
+        if (rule.match_type === "regex" || rule.match_field === "body") continue;
+        if (rule.match_field === "sender") {
+          excludeParts.push(`-from:${rule.match_value}`);
+        } else if (rule.match_field === "subject") {
+          excludeParts.push(`-subject:${rule.match_value}`);
+        }
+      }
+
+      const parts: string[] = [];
+      if (includeParts.length > 0) {
+        parts.push(includeParts.length === 1 ? includeParts[0] : `(${includeParts.join(" OR ")})`);
+      }
+      if (excludeParts.length > 0) {
+        parts.push(...excludeParts);
+      }
+
+      return parts.join(" ");
+    }
+
+    const gmailRuleFilter = buildGmailFilterFromRules(activeRules);
+    if (gmailRuleFilter) {
+      debugLog.push(`Gmail-side rule filter built: "${gmailRuleFilter}"`);
+    } else {
+      debugLog.push(`No translatable rules found — Gmail-side filter will not be applied`);
+    }
+
+    function buildListUrl(baseQuery: string): string {
+      const q = gmailRuleFilter
+        ? (baseQuery ? `${baseQuery} ${gmailRuleFilter}` : gmailRuleFilter)
+        : baseQuery;
+      const params = new URLSearchParams({ maxResults: String(maxEmailsPerSync) });
+      if (q) params.set("q", q);
+      const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params.toString()}`;
+      debugLog.push(`Gmail API URL: ${url}`);
+      return url;
+    }
+
     let listUrl: string;
     let checkpointSource: string;
     let afterDate: string;
 
-    if (connection.next_page_token) {
+    if (connection.next_page_token && !gmailRuleFilter) {
       listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?pageToken=${encodeURIComponent(connection.next_page_token)}&maxResults=${maxEmailsPerSync}`;
       checkpointSource = "next_page_token (continuing paginated scan)";
       afterDate = "(continuing from page token)";
       debugLog.push(`Resuming paginated scan using stored page token`);
-      debugLog.push(`Gmail API query: pageToken=<stored>, maxResults=${maxEmailsPerSync}`);
+      debugLog.push(`Gmail API URL: ${listUrl}`);
     } else {
+      if (connection.next_page_token && gmailRuleFilter) {
+        debugLog.push(`Stored page token discarded — starting fresh query with Gmail-side rule filter applied`);
+        await supabase
+          .from("gmail_connection")
+          .update({ next_page_token: null, updated_at: new Date().toISOString() })
+          .eq("id", connection.id);
+        connection.next_page_token = null;
+      }
+
       if (!resetCheckpoint && connection.last_synced_at) {
         const afterTimestamp = Math.floor(new Date(connection.last_synced_at).getTime() / 1000);
         checkpointSource = `last_synced_at (${connection.last_synced_at})`;
         afterDate = new Date(afterTimestamp * 1000).toISOString();
-        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+        listUrl = buildListUrl(`after:${afterTimestamp}`);
         debugLog.push(`Searching Gmail for emails AFTER: ${afterDate} (source: ${checkpointSource})`);
-        debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
       } else if (startMode === "all") {
         checkpointSource = "start_mode=all (no date filter)";
         afterDate = "(all emails)";
-        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxEmailsPerSync}`;
+        listUrl = buildListUrl("");
         debugLog.push(`start_mode=all: fetching all emails with no date restriction`);
-        debugLog.push(`Gmail API query: no after filter, maxResults=${maxEmailsPerSync}`);
       } else if (startMode === "from_now") {
         const afterTimestamp = Math.floor(Date.now() / 1000);
         checkpointSource = "start_mode=from_now";
         afterDate = new Date(afterTimestamp * 1000).toISOString();
-        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+        listUrl = buildListUrl(`after:${afterTimestamp}`);
         debugLog.push(`start_mode=from_now: only fetching emails received after now`);
-        debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
       } else if (startMode === "specific_date" && syncStartFrom) {
         const afterTimestamp = Math.floor(new Date(syncStartFrom).getTime() / 1000);
         checkpointSource = `start_mode=specific_date (${syncStartFrom})`;
         afterDate = new Date(afterTimestamp * 1000).toISOString();
-        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+        listUrl = buildListUrl(`after:${afterTimestamp}`);
         debugLog.push(`start_mode=specific_date: fetching emails AFTER: ${afterDate}`);
-        debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
       } else if (startMode === "manually" || (!startMode && !syncStartFrom)) {
         const afterTimestamp = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
         checkpointSource = startMode === "manually" ? "start_mode=manually (last 24h fallback)" : "default (last 24 hours)";
         afterDate = new Date(afterTimestamp * 1000).toISOString();
-        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+        listUrl = buildListUrl(`after:${afterTimestamp}`);
         debugLog.push(`Searching Gmail for emails AFTER: ${afterDate} (source: ${checkpointSource})`);
-        debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
       } else {
         const afterTimestamp = Math.floor(new Date(syncStartFrom!).getTime() / 1000);
         checkpointSource = `sync_start_from fallback (${syncStartFrom})`;
         afterDate = new Date(afterTimestamp * 1000).toISOString();
-        listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:${afterTimestamp}&maxResults=${maxEmailsPerSync}`;
+        listUrl = buildListUrl(`after:${afterTimestamp}`);
         debugLog.push(`Searching Gmail for emails AFTER: ${afterDate} (source: ${checkpointSource})`);
-        debugLog.push(`Gmail API query: after:${afterTimestamp} (${afterDate}), maxResults=${maxEmailsPerSync}`);
       }
     }
 
