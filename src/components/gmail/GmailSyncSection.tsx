@@ -149,7 +149,15 @@ export function GmailSyncSection({
                 </div>
                 {lastResult.search_after && (
                   <div className="mt-2 pt-2 border-t border-green-200 text-xs text-slate-500">
-                    Searched from: <span className="font-mono text-slate-700">{new Date(lastResult.search_after).toLocaleString()}</span>
+                    Searched from: <span className="font-mono text-slate-700">{(() => {
+                      const knownLabels: Record<string, string> = {
+                        '(continuing from page token)': 'Resuming previous scan',
+                        '(all emails)': 'All emails',
+                      };
+                      if (knownLabels[lastResult.search_after!]) return knownLabels[lastResult.search_after!];
+                      const d = new Date(lastResult.search_after!);
+                      return isNaN(d.getTime()) ? lastResult.search_after : d.toLocaleString();
+                    })()}</span>
                     {lastResult.checkpoint_source && (
                       <span className="ml-1 text-slate-400">({lastResult.checkpoint_source.split(' (')[0]})</span>
                     )}
